@@ -649,7 +649,7 @@ contract zRouterTest is Test {
         // Third swap: WETH -> USDC via V2
         // After wrapping, send WETH directly to V2 pool
         calls[2] = abi.encodeWithSelector(
-            zRouter.swapV2.selector, VITALIK, false, WETH, USDC, 0.077 ether, 0, DEADLINE
+            zRouter.swapV2.selector, VITALIK, false, WETH, USDC, 0.055 ether, 0, DEADLINE
         );
 
         uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
@@ -774,7 +774,7 @@ contract zRouterTest is Test {
 
         // V2: WETH -> USDC, pool is pre-funded!
         calls[1] = abi.encodeWithSelector(
-            zRouter.swapV2.selector, VITALIK, false, WETH, USDC, 0.027 ether, 0, DEADLINE
+            zRouter.swapV2.selector, VITALIK, false, WETH, USDC, 0.02 ether, 0, DEADLINE
         );
 
         uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
@@ -811,7 +811,7 @@ contract zRouterTest is Test {
 
         // Hop 3: WETH -> USDC via V2 (pool pre-funded)
         calls[2] = abi.encodeWithSelector(
-            zRouter.swapV2.selector, VITALIK, false, WETH, USDC, 0.04 ether, 0, DEADLINE
+            zRouter.swapV2.selector, VITALIK, false, WETH, USDC, 0.02 ether, 0, DEADLINE
         );
 
         uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
