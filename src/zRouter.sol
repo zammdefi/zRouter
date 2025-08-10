@@ -39,7 +39,7 @@ contract zRouter {
         if (ethIn) tokenIn = WETH;
         if (ethOut) tokenOut = WETH;
 
-        address pool = _v2PoolFor(tokenIn, tokenOut);
+        address pool = _v2PoolFor(tokenIn, tokenOut, false);
         bool zeroForOne = tokenIn < tokenOut;
 
         (uint112 r0, uint112 r1,) = IV2Pool(pool).getReserves();
@@ -426,7 +426,7 @@ contract zRouter {
         if (ethIn) tokenIn = WETH;
         if (ethOut) tokenOut = WETH;
 
-        address pool = _vSPoolFor(tokenIn, tokenOut);
+        address pool = _v2PoolFor(tokenIn, tokenOut, true);
         bool zeroForOne = tokenIn < tokenOut;
 
         (uint112 r0, uint112 r1,) = IV2Pool(pool).getReserves();
@@ -583,7 +583,11 @@ contract zRouter {
 
     // ** POOL HELPERS
 
-    function _v2PoolFor(address tokenA, address tokenB) internal pure returns (address v2pool) {
+    function _v2PoolFor(address tokenA, address tokenB, bool sushi)
+        internal
+        pure
+        returns (address v2pool)
+    {
         (address token0, address token1) = _sortTokens(tokenA, tokenB);
         v2pool = address(
             uint160(
@@ -591,27 +595,9 @@ contract zRouter {
                     keccak256(
                         abi.encodePacked(
                             hex"ff",
-                            V2_FACTORY,
+                            !sushi ? V2_FACTORY : VS_FACTORY,
                             keccak256(abi.encodePacked(token0, token1)),
-                            V2_POOL_INIT_CODE_HASH
-                        )
-                    )
-                )
-            )
-        );
-    }
-
-    function _vSPoolFor(address tokenA, address tokenB) internal pure returns (address vSpool) {
-        (address token0, address token1) = _sortTokens(tokenA, tokenB);
-        vSpool = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            hex"ff",
-                            VS_FACTORY,
-                            keccak256(abi.encodePacked(token0, token1)),
-                            VS_POOL_INIT_CODE_HASH
+                            !sushi ? V2_POOL_INIT_CODE_HASH : VS_POOL_INIT_CODE_HASH
                         )
                     )
                 )
