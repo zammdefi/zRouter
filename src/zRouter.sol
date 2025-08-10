@@ -39,8 +39,7 @@ contract zRouter {
         if (ethIn) tokenIn = WETH;
         if (ethOut) tokenOut = WETH;
 
-        address pool = _v2PoolFor(tokenIn, tokenOut, false);
-        bool zeroForOne = tokenIn < tokenOut;
+        (address pool, bool zeroForOne) = _v2PoolFor(tokenIn, tokenOut, false);
 
         (uint112 r0, uint112 r1,) = IV2Pool(pool).getReserves();
         (uint256 resIn, uint256 resOut) = zeroForOne ? (r0, r1) : (r1, r0);
@@ -99,8 +98,7 @@ contract zRouter {
         if (ethIn) tokenIn = WETH;
         if (ethOut) tokenOut = WETH;
 
-        bool zeroForOne = tokenIn < tokenOut;
-        address pool = _v3PoolFor(tokenIn, tokenOut, swapFee);
+        (address pool, bool zeroForOne) = _v3PoolFor(tokenIn, tokenOut, swapFee);
         uint160 sqrtPriceLimitX96 = zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE;
 
         (int256 a0, int256 a1) = IV3Pool(pool).swap(
@@ -156,9 +154,8 @@ contract zRouter {
             swapFee := and(shr(232, calldataload(add(0x84, 82))), 0xFFFFFF)
         }
         require(amount0Delta != 0 || amount1Delta != 0, BadSwap());
-        address pool = _v3PoolFor(tokenIn, tokenOut, swapFee);
+        (address pool, bool zeroForOne) = _v3PoolFor(tokenIn, tokenOut, swapFee);
         require(msg.sender == pool, Unauthorized());
-        bool zeroForOne = tokenIn < tokenOut;
         uint256 amountRequired = uint256(zeroForOne ? amount0Delta : amount1Delta);
 
         if (_useTransientBalance(address(this), tokenIn, 0, amountRequired)) {
@@ -315,7 +312,7 @@ contract zRouter {
         uint256 amountLimit,
         uint256 deadline
     ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
-        (address token0, address token1) = _sortTokens(tokenIn, tokenOut);
+        (address token0, address token1, bool zeroForOne) = _sortTokens(tokenIn, tokenOut);
         uint256 id0;
         uint256 id1;
         (id0, id1) = tokenIn == token0 ? (idIn, idOut) : (idOut, idIn);
@@ -350,18 +347,16 @@ contract zRouter {
         if (!exactOut) {
             bytes4 sel =
                 (dst == ZAMM) || (dst == CULT_HOOK) ? bytes4(0x3c5eec50) : bytes4(0x7466fde7);
-            bytes memory callData = abi.encodeWithSelector(
-                sel, key, swapAmount, amountLimit, tokenIn < tokenOut, to, deadline
-            );
+            bytes memory callData =
+                abi.encodeWithSelector(sel, key, swapAmount, amountLimit, zeroForOne, to, deadline);
             (bool ok, bytes memory ret) = dst.call{value: ethIn ? swapAmount : 0}(callData);
             require(ok, SwapExactInFail());
             swapResult = abi.decode(ret, (uint256));
         } else {
             bytes4 sel =
                 (dst == ZAMM) || (dst == CULT_HOOK) ? bytes4(0x38c3f8db) : bytes4(0xd4ff3f0e);
-            bytes memory callData = abi.encodeWithSelector(
-                sel, key, swapAmount, amountLimit, tokenIn < tokenOut, to, deadline
-            );
+            bytes memory callData =
+                abi.encodeWithSelector(sel, key, swapAmount, amountLimit, zeroForOne, to, deadline);
             (bool ok, bytes memory ret) = dst.call{value: ethIn ? amountLimit : 0}(callData);
             require(ok, SwapExactOutFail());
             swapResult = abi.decode(ret, (uint256));
@@ -426,8 +421,7 @@ contract zRouter {
         if (ethIn) tokenIn = WETH;
         if (ethOut) tokenOut = WETH;
 
-        address pool = _v2PoolFor(tokenIn, tokenOut, true);
-        bool zeroForOne = tokenIn < tokenOut;
+        (address pool, bool zeroForOne) = _v2PoolFor(tokenIn, tokenOut, true);
 
         (uint112 r0, uint112 r1,) = IV2Pool(pool).getReserves();
         (uint256 resIn, uint256 resOut) = zeroForOne ? (r0, r1) : (r1, r0);
@@ -586,9 +580,10 @@ contract zRouter {
     function _v2PoolFor(address tokenA, address tokenB, bool sushi)
         internal
         pure
-        returns (address v2pool)
+        returns (address v2pool, bool zeroForOne)
     {
-        (address token0, address token1) = _sortTokens(tokenA, tokenB);
+        (address token0, address token1, bool zF1) = _sortTokens(tokenA, tokenB);
+        zeroForOne = zF1;
         v2pool = address(
             uint160(
                 uint256(
@@ -608,9 +603,10 @@ contract zRouter {
     function _v3PoolFor(address tokenA, address tokenB, uint24 fee)
         internal
         pure
-        returns (address v3pool)
+        returns (address v3pool, bool zeroForOne)
     {
-        (address token0, address token1) = _sortTokens(tokenA, tokenB);
+        (address token0, address token1, bool zF1) = _sortTokens(tokenA, tokenB);
+        zeroForOne = zF1;
         v3pool = _computeV3pool(token0, token1, fee);
     }
 
@@ -647,9 +643,9 @@ contract zRouter {
     function _sortTokens(address tokenA, address tokenB)
         internal
         pure
-        returns (address token0, address token1)
+        returns (address token0, address token1, bool zeroForOne)
     {
-        (token0, token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
+        (token0, token1) = (zeroForOne = tokenA < tokenB) ? (tokenA, tokenB) : (tokenB, tokenA);
     }
 }
 
