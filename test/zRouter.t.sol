@@ -200,6 +200,29 @@ contract zRouterTest is Test {
         assertEq(ethDelta, ETH_IN, "wrong ETH spend");
     }
 
+    // -- SUSHISWAP VARIANT
+    function testExactIn_ETHtoUSDC_VS() public {
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.prank(VITALIK);
+        router.swapVS{value: ETH_IN}(
+            VITALIK,
+            false,
+            address(0),
+            USDC,
+            ETH_IN, // exact-in
+            0, // accept best quote
+            DEADLINE
+        );
+
+        uint256 usdcDelta = IERC20(USDC).balanceOf(VITALIK) - usdcBefore;
+        uint256 ethDelta = ethBefore - VITALIK.balance; // positive difference
+
+        assertGt(usdcDelta, 0, "no USDC out");
+        assertEq(ethDelta, ETH_IN, "wrong ETH spend");
+    }
+
     /* ───────── V2: ETH → USDC — exact-out ───────── */
     function testExactOut_ETHtoUSDC_V2() public {
         (uint112 r0, uint112 r1,) = IUniV2PairReserves(V2_PAIR).getReserves();
@@ -690,7 +713,7 @@ contract zRouterTest is Test {
             USDC,
             0,
             0,
-            0.025 ether,
+            0.02 ether,
             0,
             DEADLINE
         );
@@ -733,7 +756,7 @@ contract zRouterTest is Test {
             USDC,
             0,
             0,
-            0.025 ether,
+            0.02 ether,
             0,
             DEADLINE
         );

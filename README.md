@@ -8,6 +8,7 @@ Each version has dedicated entrypoint function with similar args:
 - `swapV3()`
 - `swapV4()`
 - `swapVZ()`
+- `swapVS()`
 
 Features:
 
@@ -15,10 +16,17 @@ Features:
 - multihop through a simple call chain via `multicall()`
 - slippage protection on each hop inside multihop chains
 - bridges all liquid ERC20s with ERC6909 finance on zAMM
+- includes WETH abstraction for all ETH input and output
 
-Deployed to [0x0000000000999e93e27973C9EC7298b5DBE7d7A0](https://contractscan.xyz/contract/0x0000000000999e93e27973C9EC7298b5DBE7d7A0).
+Deployed to [0x0000000000333d29b8a64dd020594fb230d5c7a3](https://contractscan.xyz/contract/0x0000000000333d29b8a64dd020594fb230d5c7a3).
 
 Great for bots, on-the-fly strategies, and aggregation.
+
+Bonus: Includes V2-style SushiSwap pools in `swapVS()`.
+
+## Security note
+
+Ensure atomic token allowances for best security. Previous versions may not have allowance guard.
 
 ## zRouter vs Uniswap – Gas Benchmarks
 

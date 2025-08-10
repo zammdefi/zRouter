@@ -8,6 +8,7 @@ contract zRouter {
     error BadSwap();
     error Expired();
     error Slippage();
+    error InvalidId();
     error Unauthorized();
     error InvalidMsgVal();
     error SwapExactInFail();
@@ -107,7 +108,7 @@ contract zRouter {
             zeroForOne,
             exactOut ? -(int256(swapAmount)) : int256(swapAmount),
             sqrtPriceLimitX96,
-            abi.encodePacked(ethIn, ethOut, msg.sender, tokenIn, tokenOut, to, pool)
+            abi.encodePacked(ethIn, ethOut, msg.sender, tokenIn, tokenOut, to, swapFee)
         );
 
         unchecked {
@@ -126,7 +127,7 @@ contract zRouter {
                 if ((swapAmount = address(this).balance) != 0 && to != address(this)) {
                     _safeTransferETH(msg.sender, swapAmount);
                 }
-            } else {
+            } else if (!ethOut) {
                 depositFor(tokenOut, 0, amountOut, to); // marks output target
             }
         }
@@ -142,7 +143,7 @@ contract zRouter {
         address tokenIn;
         address tokenOut;
         address to;
-        address pool;
+        uint24 swapFee;
         assembly ("memory-safe") {
             amount0Delta := calldataload(0x4)
             amount1Delta := calldataload(0x24)
@@ -152,9 +153,10 @@ contract zRouter {
             tokenIn := shr(96, calldataload(add(0x84, 22)))
             tokenOut := shr(96, calldataload(add(0x84, 42)))
             to := shr(96, calldataload(add(0x84, 62)))
-            pool := shr(96, calldataload(add(0x84, 82)))
+            swapFee := and(shr(232, calldataload(add(0x84, 82))), 0xFFFFFF)
         }
         require(amount0Delta != 0 || amount1Delta != 0, BadSwap());
+        address pool = _v3PoolFor(tokenIn, tokenOut, swapFee);
         require(msg.sender == pool, Unauthorized());
         bool zeroForOne = tokenIn < tokenOut;
         uint256 amountRequired = uint256(zeroForOne ? amount0Delta : amount1Delta);
@@ -203,8 +205,7 @@ contract zRouter {
         depositFor(tokenOut, 0, amountOut, to); // marks output target
     }
 
-    /// @dev Handle V4 PoolManager swap callback and perform any swaps in their key sequence.
-    /// Note: We default to hook-less swaps for congruity with other AMMs. Optimization choice.
+    /// @dev Handle V4 PoolManager swap callback - hookless default.
     function unlockCallback(bytes calldata callbackData)
         public
         payable
@@ -248,11 +249,14 @@ contract zRouter {
             uint256 amountIn = !exactOut ? swapAmount : takeAmount;
 
             if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
-                safeTransfer(
-                    tokenIn,
-                    msg.sender, // V4_POOL_MANAGER
-                    amountIn
-                );
+                if (tokenIn != address(0)) {
+                    // save
+                    safeTransfer(
+                        tokenIn,
+                        msg.sender, // V4_POOL_MANAGER
+                        amountIn
+                    );
+                }
             } else if (!ethIn) {
                 safeTransferFrom(
                     tokenIn,
@@ -404,6 +408,68 @@ contract zRouter {
         }
     }
 
+    // ** SUSHISWAP
+
+    /// @dev Mirrors `swapV2()` but for SushiSwap pool computation.
+    function swapVS(
+        address to,
+        bool exactOut,
+        address tokenIn,
+        address tokenOut,
+        uint256 swapAmount,
+        uint256 amountLimit,
+        uint256 deadline
+    ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
+        bool ethIn = tokenIn == address(0);
+        bool ethOut = tokenOut == address(0);
+
+        if (ethIn) tokenIn = WETH;
+        if (ethOut) tokenOut = WETH;
+
+        address pool = _vSPoolFor(tokenIn, tokenOut);
+        bool zeroForOne = tokenIn < tokenOut;
+
+        (uint112 r0, uint112 r1,) = IV2Pool(pool).getReserves();
+        (uint256 resIn, uint256 resOut) = zeroForOne ? (r0, r1) : (r1, r0);
+
+        unchecked {
+            if (exactOut) {
+                amountOut = swapAmount; // target
+                uint256 n = resIn * amountOut * 1000;
+                uint256 d = (resOut - amountOut) * 997;
+                amountIn = (n + d - 1) / d; // ceil-div
+                require(amountLimit == 0 || amountIn <= amountLimit, Slippage());
+            } else {
+                amountIn = swapAmount;
+                amountOut = (amountIn * 997 * resOut) / (resIn * 1000 + amountIn * 997);
+                require(amountLimit == 0 || amountOut >= amountLimit, Slippage());
+            }
+            if (!_useTransientBalance(pool, tokenIn, 0, amountIn)) {
+                if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
+                    safeTransfer(pool, tokenIn, amountIn);
+                } else if (ethIn) {
+                    wrapETH(pool, amountIn);
+                    if (msg.value > amountIn) _safeTransferETH(msg.sender, msg.value - amountIn);
+                } else {
+                    safeTransferFrom(tokenIn, msg.sender, pool, amountIn);
+                }
+            }
+        }
+
+        if (zeroForOne) {
+            IV2Pool(pool).swap(0, amountOut, ethOut ? address(this) : to, "");
+        } else {
+            IV2Pool(pool).swap(amountOut, 0, ethOut ? address(this) : to, "");
+        }
+
+        if (ethOut) {
+            unwrapETH(amountOut);
+            _safeTransferETH(to, amountOut);
+        } else {
+            depositFor(tokenOut, 0, amountOut, to); // marks output target
+        }
+    }
+
     // ** MULITSWAP HELPER
 
     function multicall(bytes[] calldata data) public payable returns (bytes[] memory) {
@@ -439,9 +505,15 @@ contract zRouter {
     // ** TRANSIENT STORAGE
 
     function deposit(address token, uint256 id, uint256 amount) public payable {
-        if (msg.value != 0 && token == WETH) _safeTransferETH(WETH, msg.value); // wrap
-
-        else require(msg.value == (token == address(0) ? amount : 0), InvalidMsgVal());
+        if (msg.value != 0) {
+            require(id == 0, InvalidId());
+            if (token == WETH) {
+                require(msg.value == amount, InvalidMsgVal());
+                _safeTransferETH(WETH, amount); // wrap to WETH
+            } else {
+                require(msg.value == (token == address(0) ? amount : 0), InvalidMsgVal());
+            }
+        }
         if (token != address(0) && msg.value == 0) {
             if (id == 0) safeTransferFrom(token, msg.sender, address(this), amount);
             else IERC6909(token).transferFrom(msg.sender, address(this), id, amount);
@@ -497,9 +569,20 @@ contract zRouter {
         }
     }
 
+    // ** WETH HELPERS
+
+    function wrap(uint256 amount) public payable {
+        amount = amount == 0 ? address(this).balance : amount;
+        _safeTransferETH(WETH, amount);
+        depositFor(WETH, 0, amount, address(this));
+    }
+
+    function unwrap(uint256 amount) public payable {
+        unwrapETH(amount == 0 ? balanceOf(WETH) : amount);
+    }
+
     // ** POOL HELPERS
 
-    /// @dev Computes the create2 pool address for a given v2 pair.
     function _v2PoolFor(address tokenA, address tokenB) internal pure returns (address v2pool) {
         (address token0, address token1) = _sortTokens(tokenA, tokenB);
         v2pool = address(
@@ -518,7 +601,24 @@ contract zRouter {
         );
     }
 
-    /// @dev Computes the create2 pool address for a given v3 pair.
+    function _vSPoolFor(address tokenA, address tokenB) internal pure returns (address vSpool) {
+        (address token0, address token1) = _sortTokens(tokenA, tokenB);
+        vSpool = address(
+            uint160(
+                uint256(
+                    keccak256(
+                        abi.encodePacked(
+                            hex"ff",
+                            VS_FACTORY,
+                            keccak256(abi.encodePacked(token0, token1)),
+                            VS_POOL_INIT_CODE_HASH
+                        )
+                    )
+                )
+            )
+        );
+    }
+
     function _v3PoolFor(address tokenA, address tokenB, uint24 fee)
         internal
         pure
@@ -576,16 +676,14 @@ bytes32 constant V2_POOL_INIT_CODE_HASH =
 interface IV2Pool {
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data)
         external;
-
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32);
 }
-
-uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
-uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
 
 address constant V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
 bytes32 constant V3_POOL_INIT_CODE_HASH =
     0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
+uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
+uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
 
 interface IV3Pool {
     function swap(
@@ -615,11 +713,9 @@ struct V4SwapParams {
 
 interface IV4PoolManager {
     function unlock(bytes calldata data) external returns (bytes memory);
-
     function swap(V4PoolKey memory key, V4SwapParams memory params, bytes calldata hookData)
         external
         returns (int256 swapDelta);
-
     function sync(address currency) external;
     function settle() external payable returns (uint256 paid);
     function take(address currency, address to, uint256 amount) external;
@@ -645,7 +741,6 @@ library BalanceDeltaLibrary {
 
 address constant ZAMM = 0x000000000000040470635EB91b7CE4D132D616eD;
 address constant ZAMM_0 = 0x00000000000008882D72EfA6cCE4B6a40b24C860;
-
 address constant CULT = 0x0000000000c5dc95539589fbD24BE07c6C14eCa4;
 address constant CULT_HOOK = 0x0000000000C625206C76dFd00bfD8d84A5Bfc948;
 uint256 constant CULT_ID =
@@ -689,9 +784,13 @@ interface IZAMM {
     ) external payable returns (uint256 amount0, uint256 amount1, uint256 liquidity);
 }
 
-// Safe transfer helpers:
+// SushiSwap helpers:
 
-/* Modified from Solady (https://github.com/Vectorized/solady/blob/main/src/utils/SafeTransferLib.sol) */
+address constant VS_FACTORY = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
+bytes32 constant VS_POOL_INIT_CODE_HASH =
+    0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303;
+
+// Solady safe transfer helpers:
 
 error TransferFailed();
 
@@ -796,7 +895,7 @@ function unwrapETH(uint256 amount) {
     }
 }
 
-// ** TRANSIENT HELPERS
+// ** TRANSIENT DEPOSIT
 
 function depositFor(address token, uint256 id, uint256 amount, address _for) {
     assembly ("memory-safe") {
