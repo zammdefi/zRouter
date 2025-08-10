@@ -1,5 +1,5 @@
 # zRouter
-[Git Source](https://github.com/zammdefi/zRouter/blob/a05798c96306fd33a6d62d08f875ca1ad04f0e1f/src/zRouter.sol)
+[Git Source](https://github.com/zammdefi/zRouter/blob/15c5fb7442065a88b0c255094f10ebd47b711ccb/src/zRouter.sol)
 
 *uniV2 / uniV3 / uniV4 / zAMM
 multi-amm multi-call router
@@ -80,8 +80,7 @@ function swapV4(
 
 ### unlockCallback
 
-*Handle V4 PoolManager swap callback and perform any swaps in their key sequence.
-Note: We default to hook-less swaps for congruity with other AMMs. Optimization choice.*
+*Handle V4 PoolManager swap callback - hookless default.*
 
 
 ```solidity
@@ -187,25 +186,38 @@ receive() external payable;
 function sweep(address token, uint256 id, uint256 amount, address to) public payable;
 ```
 
-### _v2PoolFor
-
-*Computes the create2 pool address for a given v2 pair.*
+### wrap
 
 
 ```solidity
-function _v2PoolFor(address tokenA, address tokenB) internal pure returns (address v2pool);
+function wrap(uint256 amount) public payable;
+```
+
+### unwrap
+
+
+```solidity
+function unwrap(uint256 amount) public payable;
+```
+
+### _v2PoolFor
+
+
+```solidity
+function _v2PoolFor(address tokenA, address tokenB, bool sushi)
+    internal
+    pure
+    returns (address v2pool, bool zeroForOne);
 ```
 
 ### _v3PoolFor
-
-*Computes the create2 pool address for a given v3 pair.*
 
 
 ```solidity
 function _v3PoolFor(address tokenA, address tokenB, uint24 fee)
     internal
     pure
-    returns (address v3pool);
+    returns (address v3pool, bool zeroForOne);
 ```
 
 ### _computeV3pool
@@ -235,7 +247,7 @@ function _hash(address value0, address value1, uint24 value2)
 function _sortTokens(address tokenA, address tokenB)
     internal
     pure
-    returns (address token0, address token1);
+    returns (address token0, address token1, bool zeroForOne);
 ```
 
 ## Errors
@@ -255,6 +267,12 @@ error Expired();
 
 ```solidity
 error Slippage();
+```
+
+### InvalidId
+
+```solidity
+error InvalidId();
 ```
 
 ### Unauthorized

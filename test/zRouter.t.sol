@@ -201,25 +201,49 @@ contract zRouterTest is Test {
     }
 
     // -- SUSHISWAP VARIANT
-    function testExactIn_ETHtoUSDC_VS() public {
+    function testExactIn_ETHtoUSDC_V2_SUSHISWAP() public {
         uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
         uint256 ethBefore = VITALIK.balance;
 
         vm.prank(VITALIK);
-        router.swapVS{value: ETH_IN}(
+        router.swapV2{value: ETH_IN}(
             VITALIK,
             false,
             address(0),
             USDC,
             ETH_IN, // exact-in
             0, // accept best quote
-            DEADLINE
+            type(uint256).max
         );
 
         uint256 usdcDelta = IERC20(USDC).balanceOf(VITALIK) - usdcBefore;
         uint256 ethDelta = ethBefore - VITALIK.balance; // positive difference
 
         assertGt(usdcDelta, 0, "no USDC out");
+        assertEq(ethDelta, ETH_IN, "wrong ETH spend");
+    }
+
+    address constant MILADY = 0x227c7DF69D3ed1ae7574A1a7685fDEd90292EB48;
+
+    function testExactIn_ETHtoMILADY_V2_SUSHISWAP() public {
+        uint256 milBefore = IERC20(MILADY).balanceOf(VITALIK);
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.prank(VITALIK);
+        router.swapV2{value: ETH_IN}(
+            VITALIK,
+            false,
+            address(0),
+            MILADY,
+            ETH_IN, // exact-in
+            0, // accept best quote
+            type(uint256).max
+        );
+
+        uint256 milDelta = IERC20(MILADY).balanceOf(VITALIK) - milBefore;
+        uint256 ethDelta = ethBefore - VITALIK.balance; // positive difference
+
+        assertGt(milDelta, 0, "no MIL out");
         assertEq(ethDelta, ETH_IN, "wrong ETH spend");
     }
 

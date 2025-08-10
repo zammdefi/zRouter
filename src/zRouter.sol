@@ -39,8 +39,14 @@ contract zRouter {
         if (ethIn) tokenIn = WETH;
         if (ethOut) tokenOut = WETH;
 
-        (address pool, bool zeroForOne) = _v2PoolFor(tokenIn, tokenOut, false);
+        bool sushiSwap;
+        unchecked {
+            if (deadline == type(uint256).max) {
+                (sushiSwap, deadline) = (true, block.timestamp + 30 minutes);
+            }
+        }
 
+        (address pool, bool zeroForOne) = _v2PoolFor(tokenIn, tokenOut, sushiSwap);
         (uint112 r0, uint112 r1,) = IV2Pool(pool).getReserves();
         (uint256 resIn, uint256 resOut) = zeroForOne ? (r0, r1) : (r1, r0);
 
@@ -101,15 +107,15 @@ contract zRouter {
         (address pool, bool zeroForOne) = _v3PoolFor(tokenIn, tokenOut, swapFee);
         uint160 sqrtPriceLimitX96 = zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE;
 
-        (int256 a0, int256 a1) = IV3Pool(pool).swap(
-            ethOut ? address(this) : to,
-            zeroForOne,
-            exactOut ? -(int256(swapAmount)) : int256(swapAmount),
-            sqrtPriceLimitX96,
-            abi.encodePacked(ethIn, ethOut, msg.sender, tokenIn, tokenOut, to, swapFee)
-        );
-
         unchecked {
+            (int256 a0, int256 a1) = IV3Pool(pool).swap(
+                ethOut ? address(this) : to,
+                zeroForOne,
+                exactOut ? -(int256(swapAmount)) : int256(swapAmount),
+                sqrtPriceLimitX96,
+                abi.encodePacked(ethIn, ethOut, msg.sender, tokenIn, tokenOut, to, swapFee)
+            );
+
             if (amountLimit != 0) {
                 if (exactOut) require(uint256(zeroForOne ? a0 : a1) <= amountLimit, Slippage());
                 else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
@@ -133,42 +139,44 @@ contract zRouter {
 
     /// @dev `uniswapV3SwapCallback`.
     fallback() external payable {
-        int256 amount0Delta;
-        int256 amount1Delta;
-        bool ethIn;
-        bool ethOut;
-        address payer;
-        address tokenIn;
-        address tokenOut;
-        address to;
-        uint24 swapFee;
-        assembly ("memory-safe") {
-            amount0Delta := calldataload(0x4)
-            amount1Delta := calldataload(0x24)
-            ethIn := byte(0, calldataload(0x84))
-            ethOut := byte(0, calldataload(add(0x84, 1)))
-            payer := shr(96, calldataload(add(0x84, 2)))
-            tokenIn := shr(96, calldataload(add(0x84, 22)))
-            tokenOut := shr(96, calldataload(add(0x84, 42)))
-            to := shr(96, calldataload(add(0x84, 62)))
-            swapFee := and(shr(232, calldataload(add(0x84, 82))), 0xFFFFFF)
-        }
-        require(amount0Delta != 0 || amount1Delta != 0, BadSwap());
-        (address pool, bool zeroForOne) = _v3PoolFor(tokenIn, tokenOut, swapFee);
-        require(msg.sender == pool, Unauthorized());
-        uint256 amountRequired = uint256(zeroForOne ? amount0Delta : amount1Delta);
+        unchecked {
+            int256 amount0Delta;
+            int256 amount1Delta;
+            bool ethIn;
+            bool ethOut;
+            address payer;
+            address tokenIn;
+            address tokenOut;
+            address to;
+            uint24 swapFee;
+            assembly ("memory-safe") {
+                amount0Delta := calldataload(0x4)
+                amount1Delta := calldataload(0x24)
+                ethIn := byte(0, calldataload(0x84))
+                ethOut := byte(0, calldataload(add(0x84, 1)))
+                payer := shr(96, calldataload(add(0x84, 2)))
+                tokenIn := shr(96, calldataload(add(0x84, 22)))
+                tokenOut := shr(96, calldataload(add(0x84, 42)))
+                to := shr(96, calldataload(add(0x84, 62)))
+                swapFee := and(shr(232, calldataload(add(0x84, 82))), 0xFFFFFF)
+            }
+            require(amount0Delta != 0 || amount1Delta != 0, BadSwap());
+            (address pool, bool zeroForOne) = _v3PoolFor(tokenIn, tokenOut, swapFee);
+            require(msg.sender == pool, Unauthorized());
+            uint256 amountRequired = uint256(zeroForOne ? amount0Delta : amount1Delta);
 
-        if (_useTransientBalance(address(this), tokenIn, 0, amountRequired)) {
-            safeTransfer(tokenIn, pool, amountRequired);
-        } else if (ethIn) {
-            wrapETH(pool, amountRequired);
-        } else {
-            safeTransferFrom(tokenIn, payer, pool, amountRequired);
-        }
-        if (ethOut) {
-            uint256 amountOut = uint256(-(zeroForOne ? amount1Delta : amount0Delta));
-            unwrapETH(amountOut);
-            _safeTransferETH(to, amountOut);
+            if (_useTransientBalance(address(this), tokenIn, 0, amountRequired)) {
+                safeTransfer(tokenIn, pool, amountRequired);
+            } else if (ethIn) {
+                wrapETH(pool, amountRequired);
+            } else {
+                safeTransferFrom(tokenIn, payer, pool, amountRequired);
+            }
+            if (ethOut) {
+                uint256 amountOut = uint256(-(zeroForOne ? amount1Delta : amount0Delta));
+                unwrapETH(amountOut);
+                _safeTransferETH(to, amountOut);
+            }
         }
     }
 
@@ -247,7 +255,6 @@ contract zRouter {
 
             if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
                 if (tokenIn != address(0)) {
-                    // save
                     safeTransfer(
                         tokenIn,
                         msg.sender, // V4_POOL_MANAGER
@@ -288,15 +295,17 @@ contract zRouter {
         internal
         returns (int256 delta)
     {
-        delta = IV4PoolManager(msg.sender).swap(
-            key,
-            V4SwapParams(
-                zeroForOne,
-                exactOut ? int256(swapAmount) : -int256(swapAmount),
-                zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE
-            ),
-            ""
-        );
+        unchecked {
+            delta = IV4PoolManager(msg.sender).swap(
+                key,
+                V4SwapParams(
+                    zeroForOne,
+                    exactOut ? int256(swapAmount) : -int256(swapAmount),
+                    zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE
+                ),
+                ""
+            );
+        }
     }
 
     /// @dev Pull in full and refund excess against zAMM.
@@ -336,9 +345,11 @@ contract zRouter {
         }
 
         address dst = deadline != type(uint256).max ? ZAMM : ZAMM_0; // support hookless zAMM
-        if (dst == ZAMM_0) {
-            key.feeOrHook = uint256(uint96(key.feeOrHook));
-            deadline = block.timestamp + 20 minutes;
+        unchecked {
+            if (dst == ZAMM_0) {
+                key.feeOrHook = uint256(uint96(key.feeOrHook));
+                deadline = block.timestamp + 30 minutes;
+            }
         }
 
         if (key.feeOrHook == CULT_ID) dst = CULT_HOOK; // support special CULT hook, milady
@@ -400,67 +411,6 @@ contract zRouter {
         } else {
             safeApprove(token, ZAMM, type(uint256).max);
             if (isRetro) safeApprove(token, ZAMM_0, type(uint256).max);
-        }
-    }
-
-    // ** SUSHISWAP
-
-    /// @dev Mirrors `swapV2()` but for SushiSwap pool computation.
-    function swapVS(
-        address to,
-        bool exactOut,
-        address tokenIn,
-        address tokenOut,
-        uint256 swapAmount,
-        uint256 amountLimit,
-        uint256 deadline
-    ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
-        bool ethIn = tokenIn == address(0);
-        bool ethOut = tokenOut == address(0);
-
-        if (ethIn) tokenIn = WETH;
-        if (ethOut) tokenOut = WETH;
-
-        (address pool, bool zeroForOne) = _v2PoolFor(tokenIn, tokenOut, true);
-
-        (uint112 r0, uint112 r1,) = IV2Pool(pool).getReserves();
-        (uint256 resIn, uint256 resOut) = zeroForOne ? (r0, r1) : (r1, r0);
-
-        unchecked {
-            if (exactOut) {
-                amountOut = swapAmount; // target
-                uint256 n = resIn * amountOut * 1000;
-                uint256 d = (resOut - amountOut) * 997;
-                amountIn = (n + d - 1) / d; // ceil-div
-                require(amountLimit == 0 || amountIn <= amountLimit, Slippage());
-            } else {
-                amountIn = swapAmount;
-                amountOut = (amountIn * 997 * resOut) / (resIn * 1000 + amountIn * 997);
-                require(amountLimit == 0 || amountOut >= amountLimit, Slippage());
-            }
-            if (!_useTransientBalance(pool, tokenIn, 0, amountIn)) {
-                if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
-                    safeTransfer(pool, tokenIn, amountIn);
-                } else if (ethIn) {
-                    wrapETH(pool, amountIn);
-                    if (msg.value > amountIn) _safeTransferETH(msg.sender, msg.value - amountIn);
-                } else {
-                    safeTransferFrom(tokenIn, msg.sender, pool, amountIn);
-                }
-            }
-        }
-
-        if (zeroForOne) {
-            IV2Pool(pool).swap(0, amountOut, ethOut ? address(this) : to, "");
-        } else {
-            IV2Pool(pool).swap(amountOut, 0, ethOut ? address(this) : to, "");
-        }
-
-        if (ethOut) {
-            unwrapETH(amountOut);
-            _safeTransferETH(to, amountOut);
-        } else {
-            depositFor(tokenOut, 0, amountOut, to); // marks output target
         }
     }
 
@@ -582,22 +532,24 @@ contract zRouter {
         pure
         returns (address v2pool, bool zeroForOne)
     {
-        (address token0, address token1, bool zF1) = _sortTokens(tokenA, tokenB);
-        zeroForOne = zF1;
-        v2pool = address(
-            uint160(
-                uint256(
-                    keccak256(
-                        abi.encodePacked(
-                            hex"ff",
-                            !sushi ? V2_FACTORY : VS_FACTORY,
-                            keccak256(abi.encodePacked(token0, token1)),
-                            !sushi ? V2_POOL_INIT_CODE_HASH : VS_POOL_INIT_CODE_HASH
+        unchecked {
+            (address token0, address token1, bool zF1) = _sortTokens(tokenA, tokenB);
+            zeroForOne = zF1;
+            v2pool = address(
+                uint160(
+                    uint256(
+                        keccak256(
+                            abi.encodePacked(
+                                hex"ff",
+                                !sushi ? V2_FACTORY : SUSHI_FACTORY,
+                                keccak256(abi.encodePacked(token0, token1)),
+                                !sushi ? V2_POOL_INIT_CODE_HASH : SUSHI_POOL_INIT_CODE_HASH
+                            )
                         )
                     )
                 )
-            )
-        );
+            );
+        }
     }
 
     function _v3PoolFor(address tokenA, address tokenB, uint24 fee)
@@ -654,6 +606,12 @@ contract zRouter {
 address constant V2_FACTORY = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
 bytes32 constant V2_POOL_INIT_CODE_HASH =
     0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f;
+
+// ** SushiSwap:
+
+address constant SUSHI_FACTORY = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
+bytes32 constant SUSHI_POOL_INIT_CODE_HASH =
+    0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303;
 
 interface IV2Pool {
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data)
@@ -765,12 +723,6 @@ interface IZAMM {
         uint256 deadline
     ) external payable returns (uint256 amount0, uint256 amount1, uint256 liquidity);
 }
-
-// SushiSwap helpers:
-
-address constant VS_FACTORY = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
-bytes32 constant VS_POOL_INIT_CODE_HASH =
-    0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303;
 
 // Solady safe transfer helpers:
 
