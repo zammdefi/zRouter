@@ -64,10 +64,14 @@ contract zRouter {
             }
             if (!_useTransientBalance(pool, tokenIn, 0, amountIn)) {
                 if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
-                    safeTransfer(pool, tokenIn, amountIn);
+                    safeTransfer(tokenIn, pool, amountIn);
                 } else if (ethIn) {
                     wrapETH(pool, amountIn);
-                    if (msg.value > amountIn) _safeTransferETH(msg.sender, msg.value - amountIn);
+                    if (to != address(this)) {
+                        if (msg.value > amountIn) {
+                            _safeTransferETH(msg.sender, msg.value - amountIn);
+                        }
+                    }
                 } else {
                     safeTransferFrom(tokenIn, msg.sender, pool, amountIn);
                 }
@@ -210,6 +214,19 @@ contract zRouter {
         depositFor(tokenOut, 0, amountOut, to); // marks output target
     }
 
+    // ** V4 ROUTER HELPER - HELPS WITH HOOKS AND MULTIHOPS:
+
+    function swapV4Router(
+        bytes calldata data,
+        uint256 deadline,
+        uint256 ethIn,
+        address tokenOut,
+        uint256 amountOut
+    ) public payable returns (int256 delta) {
+        delta = IV4Router(V4_ROUTER).swap{value: ethIn}(data, deadline);
+        if (amountOut != 0) depositFor(tokenOut, 0, amountOut, address(this));
+    }
+
     /// @dev Handle V4 PoolManager swap callback - hookless default.
     function unlockCallback(bytes calldata callbackData)
         public
@@ -322,9 +339,7 @@ contract zRouter {
         uint256 deadline
     ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
         (address token0, address token1, bool zeroForOne) = _sortTokens(tokenIn, tokenOut);
-        uint256 id0;
-        uint256 id1;
-        (id0, id1) = tokenIn == token0 ? (idIn, idOut) : (idOut, idIn);
+        (uint256 id0, uint256 id1) = tokenIn == token0 ? (idIn, idOut) : (idOut, idIn);
         PoolKey memory key = PoolKey(id0, id1, token0, token1, feeOrHook);
 
         bool ethIn = tokenIn == address(0);
@@ -410,6 +425,7 @@ contract zRouter {
             if (isRetro) IERC6909(token).setOperator(ZAMM_0, true);
         } else {
             safeApprove(token, ZAMM, type(uint256).max);
+            safeApprove(token, V4_ROUTER, type(uint256).max);
             if (isRetro) safeApprove(token, ZAMM_0, type(uint256).max);
         }
     }
@@ -635,7 +651,12 @@ interface IV3Pool {
     ) external returns (int256 amount0, int256 amount1);
 }
 
+address constant V4_ROUTER = 0x00000000000044a361Ae3cAc094c9D1b14Eece97;
 address constant V4_POOL_MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
+
+interface IV4Router {
+    function swap(bytes calldata data, uint256 deadline) external payable returns (int256);
+}
 
 struct V4PoolKey {
     address currency0;

@@ -1,6 +1,6 @@
-# [zRouter](https://github.com/zammdefi/zRouter)  [![License:MIT](https://img.shields.io/badge/License-MIT-black.svg)](https://opensource.org/license/mit) [![solidity](https://img.shields.io/badge/solidity-%5E0.8.30-black)](https://docs.soliditylang.org/en/v0.8.30/) [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-000000.svg)](https://getfoundry.sh/)
+# [zRouter](https://github.com/zammdefi/zRouter) [![License:MIT](https://img.shields.io/badge/License-MIT-black.svg)](https://opensource.org/license/mit) [![solidity](https://img.shields.io/badge/solidity-%5E0.8.30-black)](https://docs.soliditylang.org/en/v0.8.30/) [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-000000.svg)](https://getfoundry.sh/)
 
-An actually simple and gas-efficient Uniswap router with `zAMM`(https://zamm.finance/).
+An actually simple and gas-efficient Uniswap router with [`zAMM`](https://zamm.finance/).
 
 Each version has dedicated entrypoint function with similar args:
 
@@ -17,7 +17,9 @@ Features:
 - bridges all liquid ERC20s with ERC6909 finance on zAMM
 - includes WETH abstraction for all ETH input and output
 
-Deployed to [0x0000000000333d29b8a64dd020594fb230d5c7a3](https://contractscan.xyz/contract/0x0000000000333d29b8a64dd020594fb230d5c7a3).
+Deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835).
+
+Router helper (`zQuoter`) deployed to [0x17EfEFD7e95b85b1050f7B80D5E4526Ff3aAC5d2](https://contractscan.xyz/contract/0x17EfEFD7e95b85b1050f7B80D5E4526Ff3aAC5d2).
 
 Great for bots, on-the-fly strategies, and aggregation.
 
