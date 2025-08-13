@@ -276,7 +276,7 @@ contract zQuoter {
     error UnsupportedAMM();
 
     // Base builders:
-    function buildV2Swap(
+    function _buildV2Swap(
         address to,
         bool exactOut,
         address tokenIn,
@@ -284,7 +284,7 @@ contract zQuoter {
         uint256 swapAmount,
         uint256 amountLimit,
         uint256 deadline
-    ) public pure returns (bytes memory callData) {
+    ) internal pure returns (bytes memory callData) {
         callData = abi.encodeWithSelector(
             IZRouter.swapV2.selector,
             to,
@@ -297,14 +297,14 @@ contract zQuoter {
         );
     }
 
-    function buildSushiSwap(
+    function _buildSushiSwap(
         address to,
         bool exactOut,
         address tokenIn,
         address tokenOut,
         uint256 swapAmount,
         uint256 amountLimit
-    ) public pure returns (bytes memory callData) {
+    ) internal pure returns (bytes memory callData) {
         callData = abi.encodeWithSelector(
             IZRouter.swapV2.selector,
             to,
@@ -318,7 +318,7 @@ contract zQuoter {
     }
 
     // zAMM builder (explicit ids supported here)
-    function buildZAMMSwap(
+    function _buildZAMMSwap(
         address to,
         bool exactOut,
         uint256 feeOrHook,
@@ -329,65 +329,9 @@ contract zQuoter {
         uint256 swapAmount,
         uint256 amountLimit,
         uint256 deadline
-    ) public pure returns (bytes memory callData) {
+    ) internal pure returns (bytes memory callData) {
         callData = abi.encodeWithSelector(
             IZRouter.swapVZ.selector,
-            to,
-            exactOut,
-            feeOrHook,
-            tokenIn,
-            tokenOut,
-            idIn,
-            idOut,
-            swapAmount,
-            amountLimit,
-            deadline
-        );
-    }
-
-    // With-slippage variants:
-    function buildV2SwapWithSlippage(
-        address to,
-        bool exactOut,
-        address tokenIn,
-        address tokenOut,
-        uint256 swapAmount,
-        uint256 quotedInOrOut,
-        uint256 slippageBps,
-        uint256 deadline
-    ) public pure returns (bytes memory callData, uint256 amountLimit) {
-        amountLimit = SlippageLib.limit(exactOut, quotedInOrOut, slippageBps);
-        callData = buildV2Swap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline);
-    }
-
-    function buildSushiSwapWithSlippage(
-        address to,
-        bool exactOut,
-        address tokenIn,
-        address tokenOut,
-        uint256 swapAmount,
-        uint256 quotedInOrOut,
-        uint256 slippageBps
-    ) public pure returns (bytes memory callData, uint256 amountLimit) {
-        amountLimit = SlippageLib.limit(exactOut, quotedInOrOut, slippageBps);
-        callData = buildSushiSwap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit);
-    }
-
-    function buildZAMMSwapWithSlippage(
-        address to,
-        bool exactOut,
-        uint256 feeOrHook,
-        address tokenIn,
-        address tokenOut,
-        uint256 idIn,
-        uint256 idOut,
-        uint256 swapAmount,
-        uint256 quotedInOrOut,
-        uint256 slippageBps,
-        uint256 deadline
-    ) public pure returns (bytes memory callData, uint256 amountLimit) {
-        amountLimit = SlippageLib.limit(exactOut, quotedInOrOut, slippageBps);
-        callData = buildZAMMSwap(
             to,
             exactOut,
             feeOrHook,
@@ -424,12 +368,12 @@ contract zQuoter {
 
         if (best.source == AMM.UNI_V2) {
             callData =
-                buildV2Swap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline);
+                _buildV2Swap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline);
         } else if (best.source == AMM.SUSHI) {
-            callData = buildSushiSwap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit);
+            callData = _buildSushiSwap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit);
         } else if (best.source == AMM.ZAMM) {
             // ERC20/ETH case: default ids to 0:
-            callData = buildZAMMSwap(
+            callData = _buildZAMMSwap(
                 to,
                 exactOut,
                 best.feeBps,
@@ -445,94 +389,24 @@ contract zQuoter {
             revert UnsupportedAMM();
         }
 
-        msgValue = requiredMsgValue(exactOut, tokenIn, swapAmount, amountLimit);
+        msgValue = _requiredMsgValue(exactOut, tokenIn, swapAmount, amountLimit);
     }
 
     /* msg.value rule (matches zRouter):
        tokenIn==ETH → exactIn: swapAmount, exactOut: amountLimit; else 0. */
-    function requiredMsgValue(
+    function _requiredMsgValue(
         bool exactOut,
         address tokenIn,
         uint256 swapAmount,
         uint256 amountLimit
-    ) public pure returns (uint256) {
+    ) internal pure returns (uint256) {
         return tokenIn == address(0) ? (exactOut ? amountLimit : swapAmount) : 0;
     }
 
     error ZeroAmount();
     error InvalidToken();
 
-    /*════════ BEST ETH → TOKEN (exact-in) ════════*/
-    function bestBuyWithETH(
-        address to,
-        address tokenOut,
-        uint256 amountInETH,
-        uint256 slippageBps,
-        uint256 deadline
-    )
-        public
-        view
-        returns (Quote memory best, bytes memory callData, uint256 amountLimit, uint256 msgValue)
-    {
-        if (tokenOut == address(0)) revert InvalidToken();
-        if (amountInETH == 0) revert ZeroAmount();
-        // exactOut = false, tokenIn = ETH
-        return buildBestSwap(to, false, address(0), tokenOut, amountInETH, slippageBps, deadline);
-    }
-
-    /*════════ BEST TOKEN → ETH (exact-in) ════════*/
-    function bestSellForETH(
-        address to,
-        address tokenIn,
-        uint256 amountInToken,
-        uint256 slippageBps,
-        uint256 deadline
-    )
-        public
-        view
-        returns (Quote memory best, bytes memory callData, uint256 amountLimit, uint256 msgValue)
-    {
-        if (tokenIn == address(0)) revert InvalidToken();
-        if (amountInToken == 0) revert ZeroAmount();
-        // exactOut = false, tokenOut = ETH
-        return buildBestSwap(to, false, tokenIn, address(0), amountInToken, slippageBps, deadline);
-    }
-
-    /*════════ BEST ETH → TOKEN (exact-out) ════════*/
-    function bestBuyExactTokensWithETH(
-        address to,
-        address tokenOut,
-        uint256 amountOutTokens,
-        uint256 slippageBps,
-        uint256 deadline
-    )
-        public
-        view
-        returns (Quote memory best, bytes memory callData, uint256 amountLimit, uint256 msgValue)
-    {
-        if (tokenOut == address(0)) revert InvalidToken();
-        if (amountOutTokens == 0) revert ZeroAmount();
-        // exactOut = true, tokenIn = ETH
-        return buildBestSwap(to, true, address(0), tokenOut, amountOutTokens, slippageBps, deadline);
-    }
-
-    /*════════ BEST TOKEN → ETH (exact-out) ════════*/
-    function bestSellToExactETH(
-        address to,
-        address tokenIn,
-        uint256 amountOutETH,
-        uint256 slippageBps,
-        uint256 deadline
-    )
-        public
-        view
-        returns (Quote memory best, bytes memory callData, uint256 amountLimit, uint256 msgValue)
-    {
-        if (tokenIn == address(0)) revert InvalidToken();
-        if (amountOutETH == 0) revert ZeroAmount();
-        // exactOut = true, tokenOut = ETH
-        return buildBestSwap(to, true, tokenIn, address(0), amountOutETH, slippageBps, deadline);
-    }
+    // ** ARB MULTICALL HELPERS
 
     struct ArbPlan {
         Quote buy; // leg 1 winner (ETH -> token, exact-out)
@@ -545,6 +419,7 @@ contract zQuoter {
 
     error NoLeg1Route();
     error NoLeg2Route();
+    error NoLeg3Route();
     error BudgetExceeded(uint256 requiredMaxEthIn, uint256 budget);
 
     function buildEthArbMulticallExactOut(
@@ -559,7 +434,7 @@ contract zQuoter {
         if (token == address(0)) revert InvalidToken();
         if (budgetEthIn == 0) revert ZeroAmount();
 
-        // 1) derive tokenTarget (unchanged) ...
+        // 1) derive tokenTarget ...
         uint256 tokenTarget = tokenTargetHint;
         if (tokenTarget == 0) {
             (Quote memory buyExactIn,) = getQuotes(false, address(0), token, budgetEthIn);
@@ -610,11 +485,11 @@ contract zQuoter {
         // 5) build leg 1
         bytes memory leg1;
         if (plan.buy.source == AMM.UNI_V2) {
-            leg1 = buildV2Swap(leg1To, true, address(0), token, tokenTarget, maxEthIn, deadline);
+            leg1 = _buildV2Swap(leg1To, true, address(0), token, tokenTarget, maxEthIn, deadline);
         } else if (plan.buy.source == AMM.SUSHI) {
-            leg1 = buildSushiSwap(leg1To, true, address(0), token, tokenTarget, maxEthIn);
+            leg1 = _buildSushiSwap(leg1To, true, address(0), token, tokenTarget, maxEthIn);
         } else if (plan.buy.source == AMM.ZAMM) {
-            leg1 = buildZAMMSwap(
+            leg1 = _buildZAMMSwap(
                 ZROUTER,
                 true,
                 plan.buy.feeBps,
@@ -630,15 +505,15 @@ contract zQuoter {
             revert UnsupportedAMM();
         }
 
-        // 6) build leg 2 (unchanged)
+        // 6) build leg 2
         bytes memory leg2;
         if (plan.sell.source == AMM.UNI_V2) {
             leg2 =
-                buildV2Swap(recipient, false, token, address(0), tokenTarget, minEthOut, deadline);
+                _buildV2Swap(recipient, false, token, address(0), tokenTarget, minEthOut, deadline);
         } else if (plan.sell.source == AMM.SUSHI) {
-            leg2 = buildSushiSwap(recipient, false, token, address(0), tokenTarget, minEthOut);
+            leg2 = _buildSushiSwap(recipient, false, token, address(0), tokenTarget, minEthOut);
         } else if (plan.sell.source == AMM.ZAMM) {
-            leg2 = buildZAMMSwap(
+            leg2 = _buildZAMMSwap(
                 recipient,
                 false,
                 plan.sell.feeBps,
@@ -654,8 +529,12 @@ contract zQuoter {
             revert UnsupportedAMM();
         }
 
-        // 7) conditional ETH sweep only if leg 1 used zAMM
-        bool needEthSweep = (plan.buy.source == AMM.ZAMM);
+        // 7) Check sweep conditions and build calls
+        bool pushed = (leg1To != ZROUTER);
+        bool needEthSweep = (plan.buy.source == AMM.ZAMM)
+            || (!pushed && (plan.buy.source == AMM.UNI_V2 || plan.buy.source == AMM.SUSHI))
+            || (plan.sell.source == AMM.ZAMM);
+
         bytes[] memory calls = new bytes[](needEthSweep ? 3 : 2);
         calls[0] = leg1;
         calls[1] = leg2;
@@ -671,7 +550,558 @@ contract zQuoter {
         multicallData = abi.encodeWithSelector(IZRouterMulticall.multicall.selector, calls);
 
         // msg.value funds leg 1 exact-out
-        msgValue = requiredMsgValue(true, address(0), tokenTarget, maxEthIn);
+        msgValue = _requiredMsgValue(true, address(0), tokenTarget, maxEthIn);
+    }
+
+    /* ETH-budget arb (exact-in on leg 1), safe & conservative:
+    - Leg 1: ETH -> token (exact-in = budgetEthIn), 'to' = ZROUTER (no direct pool push)
+    - Leg 2: token -> ETH (exact-in = minTokensFromLeg1), deliver ETH to recipient
+    - Always sweep leftover tokens (if any) to recipient.
+    */
+    function buildEthArbMulticallExactIn(
+        address recipient,
+        address token, // ERC20
+        uint256 budgetEthIn, // exact-in amount for leg 1
+        uint256 slippageBps,
+        uint256 deadline,
+        uint256 minProfit // in wei; 0 to skip check
+    ) public view returns (bytes memory multicallData, uint256 msgValue, ArbPlan memory plan) {
+        if (token == address(0)) revert InvalidToken();
+        if (budgetEthIn == 0) revert ZeroAmount();
+
+        // 1) best leg 1 (exact-in ETH->token)
+        (Quote memory buyExactIn,) = getQuotes(false, address(0), token, budgetEthIn);
+        if (buyExactIn.amountOut == 0) revert NoLeg1Route();
+
+        // tokens we can *safely* count on from leg 1
+        uint256 minTokensOut = SlippageLib.limit(false, buyExactIn.amountOut, slippageBps);
+        if (minTokensOut == 0) revert NoLeg1Route();
+
+        // 2) best leg 2 (exact-in token->ETH, using minTokensOut)
+        (Quote memory sellExactIn,) = getQuotes(false, token, address(0), minTokensOut);
+        if (sellExactIn.amountOut == 0) revert NoLeg2Route();
+
+        // ETH we can *safely* count on from leg 2
+        uint256 minEthOut = SlippageLib.limit(false, sellExactIn.amountOut, slippageBps);
+
+        plan = ArbPlan({
+            buy: buyExactIn, // note: this leg is exact-in (not exact-out like the other variant)
+            sell: sellExactIn, // exact-in
+            tokenTarget: minTokensOut,
+            maxEthIn: budgetEthIn,
+            minEthOut: minEthOut,
+            estProfit: int256(minEthOut) - int256(budgetEthIn)
+        });
+
+        if (minProfit != 0 && plan.estProfit < int256(minProfit)) {
+            return ("", 0, plan);
+        }
+
+        // 3) build leg 1 (ETH->token exact-in); to = ZROUTER (avoid pool push since output is unknown ex-ante)
+        bytes memory leg1;
+        if (plan.buy.source == AMM.UNI_V2) {
+            leg1 =
+                _buildV2Swap(ZROUTER, false, address(0), token, budgetEthIn, minTokensOut, deadline);
+        } else if (plan.buy.source == AMM.SUSHI) {
+            leg1 = _buildSushiSwap(ZROUTER, false, address(0), token, budgetEthIn, minTokensOut);
+        } else if (plan.buy.source == AMM.ZAMM) {
+            leg1 = _buildZAMMSwap(
+                ZROUTER,
+                false,
+                plan.buy.feeBps,
+                address(0),
+                token,
+                0,
+                0,
+                budgetEthIn,
+                minTokensOut,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // 4) build leg 2 (token->ETH exact-in), consume exactly minTokensOut, enforce minEthOut to recipient
+        bytes memory leg2;
+        if (plan.sell.source == AMM.UNI_V2) {
+            leg2 =
+                _buildV2Swap(recipient, false, token, address(0), minTokensOut, minEthOut, deadline);
+        } else if (plan.sell.source == AMM.SUSHI) {
+            leg2 = _buildSushiSwap(recipient, false, token, address(0), minTokensOut, minEthOut);
+        } else if (plan.sell.source == AMM.ZAMM) {
+            leg2 = _buildZAMMSwap(
+                recipient,
+                false,
+                plan.sell.feeBps,
+                token,
+                address(0),
+                0,
+                0,
+                minTokensOut,
+                minEthOut,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // 5) always sweep leftover tokens from router → recipient (in case leg 1 executes better than min)
+        bool needEthSweep = (plan.sell.source == AMM.ZAMM);
+        bytes[] memory calls = new bytes[](needEthSweep ? 4 : 3);
+        calls[0] = leg1;
+        calls[1] = leg2;
+        calls[2] = abi.encodeWithSelector(IZRouterMulticall.sweep.selector, token, 0, 0, recipient);
+        if (needEthSweep) {
+            calls[3] = abi.encodeWithSelector(
+                IZRouterMulticall.sweep.selector, address(0), 0, 0, recipient
+            );
+        }
+        multicallData = abi.encodeWithSelector(IZRouterMulticall.multicall.selector, calls);
+
+        // fund leg 1 exact-in with ETH (no other leg needs msg.value)
+        msgValue = _requiredMsgValue(false, address(0), budgetEthIn, minTokensOut); // == budgetEthIn
+    }
+
+    struct TokenArbPlan {
+        Quote sell; // leg 1 winner (token -> ETH, exact-in)
+        Quote buy; // leg 2 winner (ETH -> token, exact-in)
+        uint256 tokenBudget; // leg 1 input
+        uint256 minEthOut; // leg 1 min ETH out (after slippage)
+        uint256 minTokensOut; // leg 2 min token out (after slippage)
+        int256 estProfit; // minTokensOut - tokenBudget (pre-gas/MEV)
+    }
+
+    function buildTokenArbMulticallExactIn(
+        address recipient,
+        address token, // ERC20
+        uint256 tokenBudget, // exact-in tokens for leg 1
+        uint256 slippageBps,
+        uint256 deadline,
+        uint256 minProfitTokens
+    )
+        public
+        view
+        returns (bytes memory multicallData, uint256 msgValue, TokenArbPlan memory plan)
+    {
+        if (token == address(0)) revert InvalidToken();
+        if (tokenBudget == 0) revert ZeroAmount();
+
+        // 1) leg 1 (token -> ETH, exact-in)
+        (Quote memory sellExactIn,) = getQuotes(false, token, address(0), tokenBudget);
+        if (sellExactIn.amountOut == 0) revert NoLeg1Route();
+        uint256 minEthOut = SlippageLib.limit(false, sellExactIn.amountOut, slippageBps);
+        if (minEthOut == 0) revert NoLeg1Route();
+
+        // 2) leg 2 (ETH -> token, exact-in with minEthOut)
+        (Quote memory buyExactIn,) = getQuotes(false, address(0), token, minEthOut);
+        if (buyExactIn.amountOut == 0) revert NoLeg2Route();
+        uint256 minTokensOut = SlippageLib.limit(false, buyExactIn.amountOut, slippageBps);
+
+        plan = TokenArbPlan({
+            sell: sellExactIn,
+            buy: buyExactIn,
+            tokenBudget: tokenBudget,
+            minEthOut: minEthOut,
+            minTokensOut: minTokensOut,
+            estProfit: int256(minTokensOut) - int256(tokenBudget)
+        });
+
+        if (minProfitTokens != 0 && plan.estProfit < int256(minProfitTokens)) {
+            return ("", 0, plan);
+        }
+
+        // ── build leg 1: send ETH to router (ZROUTER) ──
+        bytes memory leg1;
+        if (plan.sell.source == AMM.UNI_V2) {
+            leg1 = _buildV2Swap(ZROUTER, false, token, address(0), tokenBudget, minEthOut, deadline);
+        } else if (plan.sell.source == AMM.SUSHI) {
+            leg1 = _buildSushiSwap(ZROUTER, false, token, address(0), tokenBudget, minEthOut);
+        } else if (plan.sell.source == AMM.ZAMM) {
+            leg1 = _buildZAMMSwap(
+                ZROUTER,
+                false,
+                plan.sell.feeBps,
+                token,
+                address(0),
+                0,
+                0,
+                tokenBudget,
+                minEthOut,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // ── build leg 2: spend router-held ETH (wrap internally), deliver tokens ──
+        bytes memory leg2;
+        if (plan.buy.source == AMM.UNI_V2) {
+            leg2 =
+                _buildV2Swap(recipient, false, address(0), token, minEthOut, minTokensOut, deadline);
+        } else if (plan.buy.source == AMM.SUSHI) {
+            leg2 = _buildSushiSwap(recipient, false, address(0), token, minEthOut, minTokensOut);
+        } else if (plan.buy.source == AMM.ZAMM) {
+            leg2 = _buildZAMMSwap(
+                recipient,
+                false,
+                plan.buy.feeBps,
+                address(0),
+                token,
+                0,
+                0,
+                minEthOut,
+                minTokensOut,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // Sweep any leftover ETH (from conservative minEthOut) and token dust to recipient.
+        bytes[] memory calls = new bytes[](4);
+        calls[0] = leg1;
+        calls[1] = leg2;
+        calls[2] = abi.encodeWithSelector(
+            IZRouterMulticall.sweep.selector,
+            address(0),
+            0,
+            0, // all ETH
+            recipient
+        );
+        calls[3] = abi.encodeWithSelector(
+            IZRouterMulticall.sweep.selector,
+            token,
+            0,
+            0, // all token dust (should be 0, but safe)
+            recipient
+        );
+        multicallData = abi.encodeWithSelector(IZRouterMulticall.multicall.selector, calls);
+
+        // No external ETH needed; leg 2 spends router-held ETH from leg 1.
+        msgValue = 0;
+    }
+
+    struct TriPlan {
+        Quote leg1; // ETH -> A (exact-in)
+        Quote leg2; // A -> B  (exact-in)
+        Quote leg3; // B -> ETH (exact-in)
+        uint256 minAOut;
+        uint256 minBOut;
+        uint256 minEthOut;
+        int256 estProfit; // minEthOut - budgetEthIn (pre-gas/MEV)
+    }
+
+    // Builds ETH -> A (exact-in), A -> B (exact-out), B -> ETH (exact-in).
+    // Safe pool-push from leg2 -> leg3 when both are V2-style and the B/WETH pool exists.
+    // ETH budget is capped by `budgetEthIn`. Profit is in wei: minEthOut - budgetEthIn.
+    function buildEthTriArbExactIn(
+        address recipient,
+        address tokenA, // ERC20
+        address tokenB, // ERC20
+        uint256 budgetEthIn,
+        uint256 slippageBps,
+        uint256 deadline,
+        uint256 minProfitWei
+    ) public view returns (bytes memory multicallData, uint256 msgValue, TriPlan memory plan) {
+        if (tokenA == address(0) || tokenB == address(0)) revert InvalidToken();
+        if (budgetEthIn == 0) revert ZeroAmount();
+
+        // ── Leg 1: ETH -> A (exact-in) ─────────────────────────────────────────────
+        (Quote memory q1In,) = getQuotes(false, address(0), tokenA, budgetEthIn);
+        if (q1In.amountOut == 0) revert NoLeg1Route();
+        uint256 minAOut = SlippageLib.limit(false, q1In.amountOut, slippageBps);
+        if (minAOut == 0) revert NoLeg1Route();
+
+        // ── Choose a conservative B target from A->B exact-in, then flip to exact-out ─
+        // First, how much B could we expect if we spent all minAOut?
+        (Quote memory q2ProbeIn,) = getQuotes(false, tokenA, tokenB, minAOut);
+        if (q2ProbeIn.amountOut == 0) revert NoLeg2Route();
+        uint256 bTarget = SlippageLib.limit(false, q2ProbeIn.amountOut, slippageBps);
+        if (bTarget == 0) revert NoLeg2Route();
+
+        // Now quote A->B exact-out for that B target, to get required A (will be <= minAOut if feasible).
+        (Quote memory q2Out,) = getQuotes(true, tokenA, tokenB, bTarget);
+        if (q2Out.amountIn == 0) revert NoLeg2Route();
+        uint256 maxAIn = SlippageLib.limit(true, q2Out.amountIn, slippageBps);
+        if (maxAIn > minAOut) revert NoLeg2Route(); // not enough A from leg 1 at conservative bounds
+
+        // ── Leg 3: B -> ETH (exact-in) on B target ─────────────────────────────────
+        (Quote memory q3In,) = getQuotes(false, tokenB, address(0), bTarget);
+        if (q3In.amountOut == 0) revert NoLeg3Route();
+        uint256 minEthOut = SlippageLib.limit(false, q3In.amountOut, slippageBps);
+
+        plan = TriPlan({
+            leg1: q1In, // ETH->A exact-in (uses q1In)
+            leg2: q2Out, // A->B exact-out (uses q2Out)
+            leg3: q3In, // B->ETH exact-in (uses q3In)
+            minAOut: minAOut,
+            minBOut: bTarget, // here minBOut is our exact-out target
+            minEthOut: minEthOut,
+            estProfit: int256(minEthOut) - int256(budgetEthIn)
+        });
+
+        if (minProfitWei != 0 && plan.estProfit < int256(minProfitWei)) {
+            return ("", 0, plan);
+        }
+
+        // ── Build leg 1: ETH->A exact-in, buffered at router (cannot safely push ETH) ─
+        bytes memory leg1;
+        if (q1In.source == AMM.UNI_V2) {
+            leg1 = _buildV2Swap(ZROUTER, false, address(0), tokenA, budgetEthIn, minAOut, deadline);
+        } else if (q1In.source == AMM.SUSHI) {
+            leg1 = _buildSushiSwap(ZROUTER, false, address(0), tokenA, budgetEthIn, minAOut);
+        } else if (q1In.source == AMM.ZAMM) {
+            leg1 = _buildZAMMSwap(
+                ZROUTER,
+                false,
+                q1In.feeBps,
+                address(0),
+                tokenA,
+                0,
+                0,
+                budgetEthIn,
+                minAOut,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // ── Pick leg2 "to": push to next V2-style pool when safe ───────────────────
+        address leg2To = ZROUTER;
+        bool leg2IsV2 = (q2Out.source == AMM.UNI_V2 || q2Out.source == AMM.SUSHI);
+        bool leg3IsV2 = (q3In.source == AMM.UNI_V2 || q3In.source == AMM.SUSHI);
+        if (leg2IsV2 && leg3IsV2) {
+            bool sushiNext = (q3In.source == AMM.SUSHI);
+            (address nextPool,) = _v2PoolFor(tokenB, WETH, sushiNext);
+            if (_isContract(nextPool)) {
+                leg2To = nextPool; // safe push: exact-out B == exact-in B
+            }
+        }
+        // NOTE: if q2Out.source == AMM.ZAMM, keep leg2To = ZROUTER (refund/accounting semantics).
+
+        // ── Build leg 2: A->B exact-out (uses at most maxAIn), optionally pushed ───
+        bytes memory leg2;
+        if (q2Out.source == AMM.UNI_V2) {
+            leg2 = _buildV2Swap(leg2To, true, tokenA, tokenB, bTarget, maxAIn, deadline);
+        } else if (q2Out.source == AMM.SUSHI) {
+            leg2 = _buildSushiSwap(leg2To, true, tokenA, tokenB, bTarget, maxAIn);
+        } else if (q2Out.source == AMM.ZAMM) {
+            leg2 = _buildZAMMSwap(
+                ZROUTER, true, q2Out.feeBps, tokenA, tokenB, 0, 0, bTarget, maxAIn, deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // ── Build leg 3: B->ETH exact-in to recipient ──────────────────────────────
+        bytes memory leg3;
+        if (q3In.source == AMM.UNI_V2) {
+            leg3 = _buildV2Swap(recipient, false, tokenB, address(0), bTarget, minEthOut, deadline);
+        } else if (q3In.source == AMM.SUSHI) {
+            leg3 = _buildSushiSwap(recipient, false, tokenB, address(0), bTarget, minEthOut);
+        } else if (q3In.source == AMM.ZAMM) {
+            leg3 = _buildZAMMSwap(
+                recipient,
+                false,
+                q3In.feeBps,
+                tokenB,
+                address(0),
+                0,
+                0,
+                bTarget,
+                minEthOut,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // Sweeps: leftover A (from leg1 if maxAIn < minAOut), leftover B (if no push), and any ETH dust.
+        // (Sweeping B is harmless even if we pushed.)
+        bytes[] memory calls = new bytes[](6);
+        calls[0] = leg1;
+        calls[1] = leg2;
+        calls[2] = leg3;
+        calls[3] = abi.encodeWithSelector(IZRouterMulticall.sweep.selector, tokenA, 0, 0, recipient);
+        calls[4] = abi.encodeWithSelector(IZRouterMulticall.sweep.selector, tokenB, 0, 0, recipient);
+        calls[5] =
+            abi.encodeWithSelector(IZRouterMulticall.sweep.selector, address(0), 0, 0, recipient);
+        multicallData = abi.encodeWithSelector(IZRouterMulticall.multicall.selector, calls);
+
+        // Fund leg 1 exact-in with ETH.
+        msgValue = _requiredMsgValue(false, address(0), budgetEthIn, minAOut); // == budgetEthIn
+    }
+
+    struct TokenTriPlan {
+        Quote leg1; // token0 -> token1 (exact-in)
+        Quote leg2; // token1 -> token2 (exact-out)
+        Quote leg3; // token2 -> ETH    (exact-in)
+        uint256 minToken1Out; // conservative token1 from leg 1
+        uint256 token2Target; // exact-out target for leg 2 (and exact-in size for leg 3)
+        uint256 minEthOut; // conservative ETH from leg 3
+        int256 estProfit; // in wei; since ETH-in = 0, this is simply minEthOut
+    }
+
+    /* TOKEN0 -> TOKEN1 (exact-in) -> TOKEN2 (exact-out, push when V2/Sushi) -> ETH (exact-in)
+    Ends in ETH. Starts from a token inventory (token0Budget).
+    Safe push only from leg 2 -> leg 3 (exact-out -> exact-in handoff), and only for V2/Sushi.
+    */
+    function buildTokenTriArbToEthExactIn(
+        address recipient,
+        address token0, // start token (ERC20 you hold)
+        address token1, // mid token A
+        address token2, // mid token B (pairs with WETH for leg 3)
+        uint256 token0Budget, // exact-in amount for leg 1
+        uint256 slippageBps,
+        uint256 deadline,
+        uint256 minProfitWei // require at least this much ETH out; 0 to skip
+    )
+        public
+        view
+        returns (bytes memory multicallData, uint256 msgValue, TokenTriPlan memory plan)
+    {
+        if (recipient == address(0)) revert InvalidToken();
+        if (token0 == address(0) || token1 == address(0) || token2 == address(0)) {
+            revert InvalidToken();
+        }
+        if (token0Budget == 0) revert ZeroAmount();
+
+        // ── Leg 1: token0 -> token1 (exact-in = token0Budget) ─────────────────────
+        (Quote memory q1In,) = getQuotes(false, token0, token1, token0Budget);
+        if (q1In.amountOut == 0) revert NoLeg1Route();
+        uint256 minToken1Out = SlippageLib.limit(false, q1In.amountOut, slippageBps);
+        if (minToken1Out == 0) revert NoLeg1Route();
+
+        // ── Probe leg 2 as exact-in to derive a conservative token2 target ────────
+        (Quote memory q2ProbeIn,) = getQuotes(false, token1, token2, minToken1Out);
+        if (q2ProbeIn.amountOut == 0) revert NoLeg2Route();
+        uint256 token2Target = SlippageLib.limit(false, q2ProbeIn.amountOut, slippageBps);
+        if (token2Target == 0) revert NoLeg2Route();
+
+        // ── Leg 2 as exact-out for push: token1 -> token2 (exact-out token2Target) ─
+        (Quote memory q2Out,) = getQuotes(true, token1, token2, token2Target);
+        if (q2Out.amountIn == 0) revert NoLeg2Route();
+        uint256 maxToken1In = SlippageLib.limit(true, q2Out.amountIn, slippageBps);
+        if (maxToken1In > minToken1Out) revert NoLeg2Route(); // not feasible at conservative bounds
+
+        // ── Leg 3: token2 -> ETH (exact-in = token2Target) ────────────────────────
+        (Quote memory q3In,) = getQuotes(false, token2, address(0), token2Target);
+        if (q3In.amountOut == 0) revert NoLeg3Route();
+        uint256 minEthOut = SlippageLib.limit(false, q3In.amountOut, slippageBps);
+
+        plan = TokenTriPlan({
+            leg1: q1In,
+            leg2: q2Out,
+            leg3: q3In,
+            minToken1Out: minToken1Out,
+            token2Target: token2Target,
+            minEthOut: minEthOut,
+            estProfit: int256(minEthOut) // ETH-in is 0; profit is simply ETH out (pre-gas)
+        });
+
+        if (minProfitWei != 0 && plan.estProfit < int256(minProfitWei)) {
+            return ("", 0, plan);
+        }
+
+        // ── Build leg 1: token0 -> token1 (exact-in), to router (cannot safely push) ─
+        bytes memory leg1;
+        if (q1In.source == AMM.UNI_V2) {
+            leg1 =
+                _buildV2Swap(ZROUTER, false, token0, token1, token0Budget, minToken1Out, deadline);
+        } else if (q1In.source == AMM.SUSHI) {
+            leg1 = _buildSushiSwap(ZROUTER, false, token0, token1, token0Budget, minToken1Out);
+        } else if (q1In.source == AMM.ZAMM) {
+            leg1 = _buildZAMMSwap(
+                ZROUTER,
+                false,
+                q1In.feeBps,
+                token0,
+                token1,
+                0,
+                0,
+                token0Budget,
+                minToken1Out,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // ── Decide leg 2 'to': push to token2/WETH pool when both legs are V2-style ─
+        address leg2To = ZROUTER;
+        bool leg2IsV2 = (q2Out.source == AMM.UNI_V2 || q2Out.source == AMM.SUSHI);
+        bool leg3IsV2 = (q3In.source == AMM.UNI_V2 || q3In.source == AMM.SUSHI);
+        if (leg2IsV2 && leg3IsV2) {
+            bool sushiNext = (q3In.source == AMM.SUSHI);
+            (address nextPool,) = _v2PoolFor(token2, WETH, sushiNext);
+            if (_isContract(nextPool)) {
+                leg2To = nextPool; // safe: exact-out token2Target == exact-in for leg 3
+            }
+        }
+        // NOTE: if q2Out is zAMM, keep leg2To = ZROUTER (refund/accounting semantics).
+
+        // ── Build leg 2: token1 -> token2 (exact-out), possibly pushed ────────────
+        bytes memory leg2;
+        if (q2Out.source == AMM.UNI_V2) {
+            leg2 = _buildV2Swap(leg2To, true, token1, token2, token2Target, maxToken1In, deadline);
+        } else if (q2Out.source == AMM.SUSHI) {
+            leg2 = _buildSushiSwap(leg2To, true, token1, token2, token2Target, maxToken1In);
+        } else if (q2Out.source == AMM.ZAMM) {
+            leg2 = _buildZAMMSwap(
+                ZROUTER,
+                true,
+                q2Out.feeBps,
+                token1,
+                token2,
+                0,
+                0,
+                token2Target,
+                maxToken1In,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // ── Build leg 3: token2 -> ETH (exact-in), to recipient ───────────────────
+        bytes memory leg3;
+        if (q3In.source == AMM.UNI_V2) {
+            leg3 = _buildV2Swap(
+                recipient, false, token2, address(0), token2Target, minEthOut, deadline
+            );
+        } else if (q3In.source == AMM.SUSHI) {
+            leg3 = _buildSushiSwap(recipient, false, token2, address(0), token2Target, minEthOut);
+        } else if (q3In.source == AMM.ZAMM) {
+            leg3 = _buildZAMMSwap(
+                recipient,
+                false,
+                q3In.feeBps,
+                token2,
+                address(0),
+                0,
+                0,
+                token2Target,
+                minEthOut,
+                deadline
+            );
+        } else {
+            revert UnsupportedAMM();
+        }
+
+        // ── Multicall assembly with conservative sweeps ───────────────────────────
+        bytes[] memory calls = new bytes[](6);
+        calls[0] = leg1;
+        calls[1] = leg2;
+        calls[2] = leg3;
+        calls[3] = abi.encodeWithSelector(IZRouterMulticall.sweep.selector, token1, 0, 0, recipient);
+        calls[4] = abi.encodeWithSelector(IZRouterMulticall.sweep.selector, token2, 0, 0, recipient);
+        calls[5] =
+            abi.encodeWithSelector(IZRouterMulticall.sweep.selector, address(0), 0, 0, recipient);
+        multicallData = abi.encodeWithSelector(IZRouterMulticall.multicall.selector, calls);
+
+        // No ETH funding needed for any leg here.
+        msgValue = 0;
     }
 }
 
