@@ -19,7 +19,7 @@ Features:
 
 Deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835).
 
-Router helper (`zQuoter`) deployed to [0x17EfEFD7e95b85b1050f7B80D5E4526Ff3aAC5d2](https://contractscan.xyz/contract/0x17EfEFD7e95b85b1050f7B80D5E4526Ff3aAC5d2).
+Router helper (`zQuoter`) deployed to [0xC802D186BdFC8F53F35dF9B424CAf13f5AC5aec7](https://contractscan.xyz/contract/0xC802D186BdFC8F53F35dF9B424CAf13f5AC5aec7).
 
 Great for bots, on-the-fly strategies, and aggregation.
 
