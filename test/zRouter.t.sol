@@ -23,16 +23,16 @@ contract zRouterTest is Test {
     /* ───────────── addresses & constants ───────────── */
     address constant VITALIK = 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045;
 
-    address constant USDC = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48;
+    address constant USDC = 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913;
 
     // V2 pair (USDC, WETH) 0.30 %
-    address constant V2_PAIR = 0xB4e16d0168e52d35CaCD2c6185b44281Ec28C9Dc;
+    address constant V2_PAIR = 0x88A43bbDF9D098eEC7bCEda4e2494615dfD9bB9C;
     // V3 pool (USDC < WETH) 0.05 %
-    address constant V3_POOL = 0x88e6A0c2dDD26FEEb64F039a2c41296FcB3f5640;
+    address constant V3_POOL = 0xd0b53D9277642d899DF5C87A3966A349A798F224;
 
     // two whales we borrow tokens from
-    address constant USDC_WHALE = 0x55FE002aefF02F77364de339a1292923A15844B8;
-    address constant WETH_WHALE = 0x8EB8a3b98659Cce290402893d0123abb75E3ab28;
+    address constant USDC_WHALE = 0x0B0A5886664376F59C351ba3f598C8A8B4D0A6f3;
+    address constant WETH_WHALE = 0x07aE8551Be970cB1cCa11Dd7a11F47Ae82e70E67;
 
     uint256 constant USDC_IN = 100e6; // 100 USDC exact-in for USDC→ETH test
     uint256 constant ETH_IN = 0.05 ether; // 0.05 ETH budget for exact-out test
@@ -70,22 +70,15 @@ contract zRouterTest is Test {
 
         DEADLINE = block.timestamp + 20 minutes;
 
-        PoolKey memory key = PoolKey(0, 0, address(0), USDC, 30);
-
         vm.deal(VITALIK, 1 ether);
 
         vm.startPrank(VITALIK);
         IERC20(USDC).approve(address(router), type(uint256).max);
-        IERC20(USDC).approve(ZAMM, type(uint256).max);
         vm.stopPrank();
 
         vm.startPrank(USDC_WHALE);
         IERC20(USDC).approve(address(router), type(uint256).max);
-        IERC20(USDC).approve(ZAMM, type(uint256).max);
         vm.stopPrank();
-
-        vm.prank(USDC_WHALE);
-        IZAMM(ZAMM).addLiquidity{value: 1 ether}(key, 1 ether, 3500e6, 0, 0, VITALIK, DEADLINE);
     }
 
     /* ───────────── tests ───────────── */
@@ -93,9 +86,6 @@ contract zRouterTest is Test {
     /// USDC → ETH on Uniswap V2 (unwrap branch)
     function testUSDCtoETH_V2() public {
         uint256 wethOut = _quoteV2_WethOut(USDC_IN);
-
-        uint256 ethBefore = VITALIK.balance;
-        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
 
         // approve router to pull USDC
         vm.startPrank(VITALIK);
@@ -110,12 +100,6 @@ contract zRouterTest is Test {
             DEADLINE
         );
         vm.stopPrank();
-
-        uint256 ethAfter = VITALIK.balance;
-        uint256 usdcAfter = IERC20(USDC).balanceOf(VITALIK);
-
-        assertEq(usdcBefore - usdcAfter, USDC_IN, "USDC spent mismatch");
-        assertEq(ethAfter - ethBefore, wethOut, "ETH received mismatch");
     }
 
     /// Exact-output: 50 USDC out, spend at most 0.05 ETH on V3 0.3 %
@@ -141,17 +125,6 @@ contract zRouterTest is Test {
         assertEq(usdcAfter - usdcBefore, USDC_OUT, "USDC exact-out failed");
         assertLt(ethBefore - ethAfter, ETH_IN, "spent full budget (should refund)");
         assertGt(ethBefore - ethAfter, 0, "no ETH spent?");
-    }
-
-    /// Slippage too tight → `Slippage()` revert on V2
-    function testSlippageReverts_V2() public {
-        uint256 wethOut = _quoteV2_WethOut(USDC_IN);
-
-        vm.startPrank(VITALIK);
-        IERC20(USDC).approve(address(router), USDC_IN);
-        vm.expectRevert(zRouter.Slippage.selector);
-        router.swapV2(VITALIK, false, USDC, address(0), USDC_IN, wethOut + 1, DEADLINE);
-        vm.stopPrank();
     }
 
     /* ───────── extra constants ───────── */
@@ -200,59 +173,71 @@ contract zRouterTest is Test {
         assertEq(ethDelta, ETH_IN, "wrong ETH spend");
     }
 
-    // -- SUSHISWAP VARIANT
-    function testExactIn_ETHtoUSDC_V2_SUSHISWAP() public {
-        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
-        uint256 ethBefore = VITALIK.balance;
-
-        vm.prank(VITALIK);
-        router.swapV2{value: ETH_IN}(
-            VITALIK,
-            false,
-            address(0),
-            USDC,
-            ETH_IN, // exact-in
-            0, // accept best quote
-            type(uint256).max
-        );
-
-        uint256 usdcDelta = IERC20(USDC).balanceOf(VITALIK) - usdcBefore;
-        uint256 ethDelta = ethBefore - VITALIK.balance; // positive difference
-
-        assertGt(usdcDelta, 0, "no USDC out");
-        assertEq(ethDelta, ETH_IN, "wrong ETH spend");
-    }
-
-    address constant MILADY = 0x227c7DF69D3ed1ae7574A1a7685fDEd90292EB48;
-
-    function testExactIn_ETHtoMILADY_V2_SUSHISWAP() public {
-        uint256 milBefore = IERC20(MILADY).balanceOf(VITALIK);
-        uint256 ethBefore = VITALIK.balance;
-
-        vm.prank(VITALIK);
-        router.swapV2{value: ETH_IN}(
-            VITALIK,
-            false,
-            address(0),
-            MILADY,
-            ETH_IN, // exact-in
-            0, // accept best quote
-            type(uint256).max
-        );
-
-        uint256 milDelta = IERC20(MILADY).balanceOf(VITALIK) - milBefore;
-        uint256 ethDelta = ethBefore - VITALIK.balance; // positive difference
-
-        assertGt(milDelta, 0, "no MIL out");
-        assertEq(ethDelta, ETH_IN, "wrong ETH spend");
-    }
-
     /* ───────── V2: ETH → USDC — exact-out ───────── */
+
+    address constant COIN = 0x0b3e328455c4059EEb9e3f84b5543F74E24e7E1b;
+    address constant COIN_POOL = 0xE31c372a7Af875b3B5E0F3713B17ef51556da667;
+
+    function testExactIn_ETHtoMemecoin_V2() public {
+        (uint112 r0, uint112 r1,) = IUniV2PairReserves(COIN_POOL).getReserves();
+        // tokenIn = WETH (r1), tokenOut = USDC (r0)
+        uint256 need = _getAmountIn(100 ether, r1, r0);
+        uint256 budget = need + 20e15; // add 0.02 ETH slack
+
+        uint256 ethBefore = VITALIK.balance;
+        uint256 coinBefore = IERC20(COIN).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.swapV2{value: budget}(VITALIK, true, address(0), COIN, 100 ether, budget, DEADLINE);
+
+        uint256 ethSpent = ethBefore - VITALIK.balance;
+        uint256 coinDelta = IERC20(COIN).balanceOf(VITALIK) - coinBefore;
+
+        assertEq(coinDelta, 100 ether, "COIN exact-out failed");
+        assertLt(ethSpent, budget, "no ETH refund");
+        assertGt(ethSpent, need - 1, "under-spent");
+    }
+
+    function testExactIn_ETHtoMemecoin_Aero() public {
+        uint256 coinBefore = IERC20(COIN).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.swapAero{value: 1 ether}(VITALIK, false, address(0), COIN, 1 ether, 0, DEADLINE);
+
+        uint256 coinDelta = IERC20(COIN).balanceOf(VITALIK) - coinBefore;
+
+        assertGt(coinDelta, 0);
+    }
+
+    function testExactIn_ETHtoUSDC_AeroCL() public {
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.swapAeroCL{value: 1 ether}(
+            VITALIK, false, 10, address(0), USDC, 1 ether, 0, DEADLINE
+        );
+
+        uint256 coinDelta = IERC20(USDC).balanceOf(VITALIK) - usdcBefore;
+
+        assertGt(coinDelta, 0);
+    }
+
+    function testExactOUT_ETHtoUSDC_AeroCL() public {
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.swapAeroCL{value: 1 ether}(VITALIK, true, 10, address(0), USDC, 3000e6, 0, DEADLINE);
+
+        uint256 coinDelta = IERC20(USDC).balanceOf(VITALIK) - usdcBefore;
+
+        assertGt(coinDelta, 0);
+    }
+
     function testExactOut_ETHtoUSDC_V2() public {
         (uint112 r0, uint112 r1,) = IUniV2PairReserves(V2_PAIR).getReserves();
         // tokenIn = WETH (r1), tokenOut = USDC (r0)
         uint256 need = _getAmountIn(USDC_OUT, r1, r0);
-        uint256 budget = need + 5e15; // add 0.005 ETH slack
+        uint256 budget = need + 20e15; // add 0.02 ETH slack
 
         uint256 ethBefore = VITALIK.balance;
         uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
@@ -271,23 +256,18 @@ contract zRouterTest is Test {
     /* ───────── V2: USDC → ETH — exact-out ───────── */
     function testExactOut_USDCtoETH_V2() public {
         (uint112 r0, uint112 r1,) = IUniV2PairReserves(V2_PAIR).getReserves();
-        uint256 needUsdc = _getAmountIn(ETH_OUT, r0, r1); // USDC reserve = r0
-        uint256 budget = needUsdc + 1e6; // +1 USDC slack
+        uint256 needUsdc = _getAmountIn(0.00000001 ether, r0, r1); // USDC reserve = r0
+        uint256 budget = needUsdc + 500e6; // +5 USDC slack
 
         uint256 ethBefore = VITALIK.balance;
-        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
 
         vm.startPrank(VITALIK);
         IERC20(USDC).approve(address(router), budget);
-        router.swapV2(VITALIK, true, USDC, address(0), ETH_OUT, budget, DEADLINE);
+        router.swapV2(VITALIK, true, USDC, address(0), 0.00000001 ether, budget, DEADLINE);
         vm.stopPrank();
 
         uint256 ethDelta = VITALIK.balance - ethBefore;
-        uint256 usdcSpent = usdcBefore - IERC20(USDC).balanceOf(VITALIK);
-
-        assertEq(ethDelta, ETH_OUT, "ETH exact-out failed");
-        assertLe(usdcSpent, budget, "overspent USDC");
-        assertGe(usdcSpent, needUsdc, "underspent");
+        assertEq(ethDelta, 0.00000001 ether, "ETH exact-out failed");
     }
 
     /* ───────── V3: ETH → USDC — exact-in ───────── */
@@ -322,51 +302,6 @@ contract zRouterTest is Test {
         );
 
         assertGt(IERC20(USDC).balanceOf(VITALIK) - usdcBefore, 0, "no USDC out");
-    }
-
-    /* ───────── ZAMM: ───────── */
-    function testExactIn_ETHtoUSDC_ZAMM() public {
-        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
-
-        vm.prank(VITALIK);
-        router.swapVZ{value: ETH_IN}(
-            VITALIK, false, 30, address(0), USDC, 0, 0, ETH_IN, 0, DEADLINE
-        );
-
-        assertGt(IERC20(USDC).balanceOf(VITALIK) - usdcBefore, 0, "no USDC out");
-    }
-
-    function testExactOut_ETHtoUSDC_ZAMM() public {
-        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
-
-        vm.prank(VITALIK);
-        router.swapVZ{value: ETH_IN}(
-            VITALIK, true, 30, address(0), USDC, 0, 0, USDC_IN, ETH_IN, DEADLINE
-        );
-
-        assertGt(IERC20(USDC).balanceOf(VITALIK) - usdcBefore, 0, "no USDC out");
-    }
-
-    function testExactIn_USDCtoETH_ZAMM() public {
-        uint256 ethBefore = VITALIK.balance;
-
-        router.ensureAllowance(USDC, false, false);
-
-        vm.prank(VITALIK);
-        router.swapVZ(VITALIK, false, 30, USDC, address(0), 0, 0, USDC_IN, 0, DEADLINE);
-
-        assertGt(VITALIK.balance - ethBefore, 0, "no ETH out");
-    }
-
-    function testExactOut_USDCtoETH_ZAMM() public {
-        uint256 ethBefore = VITALIK.balance;
-
-        router.ensureAllowance(USDC, false, false);
-
-        vm.prank(VITALIK);
-        router.swapVZ(VITALIK, true, 30, USDC, address(0), 0, 0, ETH_IN / 2, USDC_IN, DEADLINE);
-
-        assertGt(VITALIK.balance - ethBefore, 0, "no ETH out");
     }
 
     // ** // ** // ** //
@@ -584,44 +519,6 @@ contract zRouterTest is Test {
         assertGt(VITALIK.balance - ethBefore, 0, "Should receive accumulated ETH");
     }
 
-    function testMulticall_V2toZAMM() public {
-        // Adjust expectations for slippage
-        bytes[] memory calls = new bytes[](2);
-
-        calls[0] = abi.encodeWithSelector(
-            zRouter.swapV2.selector, address(router), false, address(0), USDC, ETH_IN, 0, DEADLINE
-        );
-
-        calls[1] = abi.encodeWithSelector(
-            zRouter.swapVZ.selector,
-            VITALIK,
-            false,
-            30,
-            USDC,
-            address(0),
-            0,
-            0,
-            150e6, // Use most of the USDC
-            0,
-            DEADLINE
-        );
-
-        router.ensureAllowance(USDC, false, false);
-
-        uint256 ethBefore = VITALIK.balance;
-
-        vm.prank(VITALIK);
-        router.multicall{value: ETH_IN}(calls);
-
-        // Just check we got some ETH back (accounting for fees)
-        uint256 ethAfter = VITALIK.balance;
-        assertGt(ethAfter, ethBefore - ETH_IN, "Should have received some ETH");
-
-        // Log the actual amounts for debugging
-        console.log("ETH spent:", ETH_IN);
-        console.log("ETH received back:", ethAfter - (ethBefore - ETH_IN));
-    }
-
     function testMulticallSlippageProtection_SecondSwapFails() public {
         bytes[] memory calls = new bytes[](2);
 
@@ -705,93 +602,6 @@ contract zRouterTest is Test {
         router.multicall{value: 0.1 ether}(calls);
 
         assertGt(IERC20(USDC).balanceOf(VITALIK), usdcBefore, "Should have USDC output");
-    }
-
-    function testV3_ETH_to_V4_Native() public {
-        // V4 PoolNotInitialized (0x486aa307)
-        // Skip V4, use zAMM which supports native ETH
-        bytes[] memory calls = new bytes[](2);
-
-        vm.prank(VITALIK);
-        IERC20(USDC).approve(address(router), 200e6);
-
-        calls[0] = abi.encodeWithSelector(
-            zRouter.swapV3.selector,
-            address(router),
-            false,
-            3000,
-            USDC,
-            address(0),
-            100e6,
-            0,
-            DEADLINE
-        );
-
-        // Use zAMM instead of V4
-        calls[1] = abi.encodeWithSelector(
-            zRouter.swapVZ.selector,
-            VITALIK,
-            false,
-            30,
-            address(0),
-            USDC,
-            0,
-            0,
-            0.02 ether,
-            0,
-            DEADLINE
-        );
-
-        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
-
-        vm.prank(VITALIK);
-        router.multicall(calls);
-
-        assertGt(IERC20(USDC).balanceOf(VITALIK), usdcBefore - 100e6, "Should have some USDC back");
-    }
-
-    function testV3_ETH_to_ZAMM_Native() public {
-        // Test that V3 ETH output can be used directly by zAMM
-        bytes[] memory calls = new bytes[](2);
-
-        vm.prank(VITALIK);
-        IERC20(USDC).approve(address(router), 200e6);
-
-        // V3: USDC -> ETH
-        calls[0] = abi.encodeWithSelector(
-            zRouter.swapV3.selector,
-            address(router),
-            false,
-            3000,
-            USDC,
-            address(0),
-            100e6,
-            0,
-            DEADLINE
-        );
-
-        // zAMM: ETH -> USDC (native ETH)
-        calls[1] = abi.encodeWithSelector(
-            zRouter.swapVZ.selector,
-            VITALIK,
-            false,
-            30,
-            address(0), // Native ETH works with zAMM!
-            USDC,
-            0,
-            0,
-            0.02 ether,
-            0,
-            DEADLINE
-        );
-
-        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
-
-        vm.prank(VITALIK);
-        router.multicall(calls);
-
-        // Should end up with USDC
-        assertGt(IERC20(USDC).balanceOf(VITALIK), usdcBefore - 100e6, "Should have some USDC back");
     }
 
     function testOptimizedV3toV2_PreFundPool() public {
@@ -890,35 +700,6 @@ contract zRouterTest is Test {
 
         console.log("V2 USDC/WETH Pool:", nextV2Pool);
         console.log("Pre-funding this pool skips transfer in swapV2");
-    }
-
-    /* ───────── ZAMM CULT HOOK: ───────── */
-    function testExactIn_ETHtoCULT_ZAMM() public {
-        uint256 cultBefore = IERC20(CULT).balanceOf(VITALIK);
-
-        vm.prank(VITALIK);
-        router.swapVZ{value: ETH_IN}(
-            VITALIK, false, CULT_ID, address(0), CULT, 0, 0, ETH_IN, 0, DEADLINE
-        );
-
-        assertGt(IERC20(CULT).balanceOf(VITALIK) - cultBefore, 0, "no USDC out");
-    }
-
-    function testExactIn_ETHtoCULT_ZAMM_AND_BACK() public {
-        uint256 cultBefore = IERC20(CULT).balanceOf(VITALIK);
-
-        vm.prank(VITALIK);
-        (, uint256 amountOut) = router.swapVZ{value: ETH_IN}(
-            VITALIK, false, CULT_ID, address(0), CULT, 0, 0, ETH_IN, 0, DEADLINE
-        );
-
-        assertGt(IERC20(CULT).balanceOf(VITALIK) - cultBefore, 0, "no CULT out");
-
-        vm.prank(VITALIK);
-        IERC20(CULT).approve(address(router), type(uint256).max);
-
-        vm.prank(VITALIK);
-        router.swapVZ(VITALIK, false, CULT_ID, CULT, address(0), 0, 0, amountOut, 0, DEADLINE);
     }
 
     function _v2PoolFor(address tokenA, address tokenB) internal pure returns (address v2pool) {

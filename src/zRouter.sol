@@ -4,6 +4,7 @@ pragma solidity ^0.8.30;
 /// @dev uniV2 / uniV3 / uniV4 / zAMM
 ///      multi-amm multi-call router
 ///      optimized with simple abi.
+///      This version is for Base.
 contract zRouter {
     error BadSwap();
     error Expired();
@@ -11,8 +12,6 @@ contract zRouter {
     error InvalidId();
     error Unauthorized();
     error InvalidMsgVal();
-    error SwapExactInFail();
-    error SwapExactOutFail();
     error ETHTransferFailed();
 
     modifier checkDeadline(uint256 deadline) {
@@ -20,9 +19,7 @@ contract zRouter {
         _;
     }
 
-    constructor() payable {
-        safeApprove(CULT, CULT_HOOK, type(uint256).max); // milady
-    }
+    constructor() payable {}
 
     function swapV2(
         address to,
@@ -39,14 +36,7 @@ contract zRouter {
         if (ethIn) tokenIn = WETH;
         if (ethOut) tokenOut = WETH;
 
-        bool sushiSwap;
-        unchecked {
-            if (deadline == type(uint256).max) {
-                (sushiSwap, deadline) = (true, block.timestamp + 30 minutes);
-            }
-        }
-
-        (address pool, bool zeroForOne) = _v2PoolFor(tokenIn, tokenOut, sushiSwap);
+        (address pool, bool zeroForOne) = _v2PoolFor(tokenIn, tokenOut);
         (uint112 r0, uint112 r1,) = IV2Pool(pool).getReserves();
         (uint256 resIn, uint256 resOut) = zeroForOne ? (r0, r1) : (r1, r0);
 
@@ -117,7 +107,7 @@ contract zRouter {
                 zeroForOne,
                 exactOut ? -(int256(swapAmount)) : int256(swapAmount),
                 sqrtPriceLimitX96,
-                abi.encodePacked(ethIn, ethOut, msg.sender, tokenIn, tokenOut, to, swapFee)
+                abi.encodePacked(ethIn, ethOut, false, msg.sender, tokenIn, tokenOut, to, swapFee)
             );
 
             if (amountLimit != 0) {
@@ -137,49 +127,6 @@ contract zRouter {
                 }
             } else if (!ethOut) {
                 depositFor(tokenOut, 0, amountOut, to); // marks output target
-            }
-        }
-    }
-
-    /// @dev `uniswapV3SwapCallback`.
-    fallback() external payable {
-        unchecked {
-            int256 amount0Delta;
-            int256 amount1Delta;
-            bool ethIn;
-            bool ethOut;
-            address payer;
-            address tokenIn;
-            address tokenOut;
-            address to;
-            uint24 swapFee;
-            assembly ("memory-safe") {
-                amount0Delta := calldataload(0x4)
-                amount1Delta := calldataload(0x24)
-                ethIn := byte(0, calldataload(0x84))
-                ethOut := byte(0, calldataload(add(0x84, 1)))
-                payer := shr(96, calldataload(add(0x84, 2)))
-                tokenIn := shr(96, calldataload(add(0x84, 22)))
-                tokenOut := shr(96, calldataload(add(0x84, 42)))
-                to := shr(96, calldataload(add(0x84, 62)))
-                swapFee := and(shr(232, calldataload(add(0x84, 82))), 0xFFFFFF)
-            }
-            require(amount0Delta != 0 || amount1Delta != 0, BadSwap());
-            (address pool, bool zeroForOne) = _v3PoolFor(tokenIn, tokenOut, swapFee);
-            require(msg.sender == pool, Unauthorized());
-            uint256 amountRequired = uint256(zeroForOne ? amount0Delta : amount1Delta);
-
-            if (_useTransientBalance(address(this), tokenIn, 0, amountRequired)) {
-                safeTransfer(tokenIn, pool, amountRequired);
-            } else if (ethIn) {
-                wrapETH(pool, amountRequired);
-            } else {
-                safeTransferFrom(tokenIn, payer, pool, amountRequired);
-            }
-            if (ethOut) {
-                uint256 amountOut = uint256(-(zeroForOne ? amount1Delta : amount0Delta));
-                unwrapETH(amountOut);
-                _safeTransferETH(to, amountOut);
             }
         }
     }
@@ -359,33 +306,11 @@ contract zRouter {
             }
         }
 
-        address dst = deadline != type(uint256).max ? ZAMM : ZAMM_0; // support hookless zAMM
-        unchecked {
-            if (dst == ZAMM_0) {
-                key.feeOrHook = uint256(uint96(key.feeOrHook));
-                deadline = block.timestamp + 30 minutes;
-            }
-        }
-
-        if (key.feeOrHook == CULT_ID) dst = CULT_HOOK; // support special CULT hook, milady
-
         uint256 swapResult;
         if (!exactOut) {
-            bytes4 sel =
-                (dst == ZAMM) || (dst == CULT_HOOK) ? bytes4(0x3c5eec50) : bytes4(0x7466fde7);
-            bytes memory callData =
-                abi.encodeWithSelector(sel, key, swapAmount, amountLimit, zeroForOne, to, deadline);
-            (bool ok, bytes memory ret) = dst.call{value: ethIn ? swapAmount : 0}(callData);
-            require(ok, SwapExactInFail());
-            swapResult = abi.decode(ret, (uint256));
+            IZAMM(ZAMM).swapExactIn(key, swapAmount, amountLimit, zeroForOne, to, deadline);
         } else {
-            bytes4 sel =
-                (dst == ZAMM) || (dst == CULT_HOOK) ? bytes4(0x38c3f8db) : bytes4(0xd4ff3f0e);
-            bytes memory callData =
-                abi.encodeWithSelector(sel, key, swapAmount, amountLimit, zeroForOne, to, deadline);
-            (bool ok, bytes memory ret) = dst.call{value: ethIn ? amountLimit : 0}(callData);
-            require(ok, SwapExactOutFail());
-            swapResult = abi.decode(ret, (uint256));
+            IZAMM(ZAMM).swapExactOut(key, swapAmount, amountLimit, zeroForOne, to, deadline);
         }
 
         // ── return values ────────────────────────────────
@@ -419,14 +344,159 @@ contract zRouter {
     }
 
     /// @dev Allows remote pulls by zAMM for swapZAMM() calls.
-    function ensureAllowance(address token, bool is6909, bool isRetro) public payable {
+    function ensureAllowance(address token, bool is6909) public payable {
         if (is6909) {
             IERC6909(token).setOperator(ZAMM, true);
-            if (isRetro) IERC6909(token).setOperator(ZAMM_0, true);
         } else {
             safeApprove(token, ZAMM, type(uint256).max);
             safeApprove(token, V4_ROUTER, type(uint256).max);
-            if (isRetro) safeApprove(token, ZAMM_0, type(uint256).max);
+        }
+    }
+
+    // ** AERO SWAPS
+
+    function swapAero(
+        address to,
+        bool stable,
+        address tokenIn,
+        address tokenOut,
+        uint256 swapAmount,
+        uint256 amountLimit,
+        uint256 deadline
+    ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
+        bool ethIn = tokenIn == address(0);
+        bool ethOut = tokenOut == address(0);
+        if (ethIn) tokenIn = WETH;
+        if (ethOut) tokenOut = WETH;
+
+        (address pool, bool zeroForOne) = _aeroPoolFor(tokenIn, tokenOut, stable);
+
+        amountIn = swapAmount;
+        amountOut = IAeroPool(pool).getAmountOut(amountIn, tokenIn);
+        require(amountLimit == 0 || amountOut >= amountLimit, Slippage());
+
+        if (!_useTransientBalance(pool, tokenIn, 0, amountIn)) {
+            if (_useTransientBalance(address(this), tokenIn, 0, amountIn)) {
+                safeTransfer(tokenIn, pool, amountIn);
+            } else if (ethIn) {
+                wrapETH(pool, amountIn);
+                if (to != address(this) && msg.value > amountIn) {
+                    _safeTransferETH(msg.sender, msg.value - amountIn);
+                }
+            } else {
+                safeTransferFrom(tokenIn, msg.sender, pool, amountIn);
+            }
+        }
+
+        // Execute swap (Aerodrome is V2-like: push first, then swap):
+        if (zeroForOne) {
+            IAeroPool(pool).swap(0, amountOut, ethOut ? address(this) : to, "");
+        } else {
+            IAeroPool(pool).swap(amountOut, 0, ethOut ? address(this) : to, "");
+        }
+
+        if (ethOut) {
+            unwrapETH(amountOut);
+            _safeTransferETH(to, amountOut);
+        } else {
+            depositFor(tokenOut, 0, amountOut, to); // marks output target
+        }
+    }
+
+    function swapAeroCL(
+        address to,
+        bool exactOut,
+        int24 tickSpacing,
+        address tokenIn,
+        address tokenOut,
+        uint256 swapAmount,
+        uint256 amountLimit,
+        uint256 deadline
+    ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
+        bool ethIn = tokenIn == address(0);
+        bool ethOut = tokenOut == address(0);
+
+        if (ethIn) tokenIn = WETH;
+        if (ethOut) tokenOut = WETH;
+
+        (address pool, bool zeroForOne) = _aeroCLPoolFor(tokenIn, tokenOut, tickSpacing);
+        uint160 sqrtPriceLimitX96 = zeroForOne ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE;
+
+        unchecked {
+            (int256 a0, int256 a1) = IV3Pool(pool).swap(
+                ethOut ? address(this) : to,
+                zeroForOne,
+                exactOut ? -(int256(swapAmount)) : int256(swapAmount),
+                sqrtPriceLimitX96,
+                abi.encodePacked(
+                    ethIn, ethOut, true, msg.sender, tokenIn, tokenOut, to, tickSpacing
+                )
+            );
+
+            if (amountLimit != 0) {
+                if (exactOut) require(uint256(zeroForOne ? a0 : a1) <= amountLimit, Slippage());
+                else require(uint256(-(zeroForOne ? a1 : a0)) >= amountLimit, Slippage());
+            }
+
+            // ── return values ────────────────────────────────
+            // ── translate pool deltas to user-facing amounts ─
+            (int256 dIn, int256 dOut) = zeroForOne ? (a0, a1) : (a1, a0);
+            amountIn = dIn >= 0 ? uint256(dIn) : uint256(-dIn);
+            amountOut = dOut <= 0 ? uint256(-dOut) : uint256(dOut);
+
+            if (ethIn) {
+                if ((swapAmount = address(this).balance) != 0 && to != address(this)) {
+                    _safeTransferETH(msg.sender, swapAmount);
+                }
+            } else if (!ethOut) {
+                depositFor(tokenOut, 0, amountOut, to); // marks output target
+            }
+        }
+    }
+
+    /// @dev `uniswapV3SwapCallback`.
+    function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata)
+        public
+        payable
+    {
+        unchecked {
+            bool ethIn;
+            bool ethOut;
+            bool isAero;
+            address payer;
+            address tokenIn;
+            address tokenOut;
+            address to;
+            int24 tickSpacing;
+            assembly ("memory-safe") {
+                ethIn := byte(0, calldataload(0x84))
+                ethOut := byte(0, calldataload(add(0x84, 1)))
+                isAero := byte(0, calldataload(add(0x84, 2)))
+                payer := shr(96, calldataload(add(0x84, 3)))
+                tokenIn := shr(96, calldataload(add(0x84, 23)))
+                tokenOut := shr(96, calldataload(add(0x84, 43)))
+                to := shr(96, calldataload(add(0x84, 63)))
+                tickSpacing := and(shr(232, calldataload(add(0x84, 83))), 0xFFFFFF)
+            }
+            require(amount0Delta != 0 || amount1Delta != 0, BadSwap());
+            (address pool, bool zeroForOne) = isAero
+                ? _aeroCLPoolFor(tokenIn, tokenOut, tickSpacing)
+                : _v3PoolFor(tokenIn, tokenOut, uint24(tickSpacing));
+            require(msg.sender == pool, Unauthorized());
+            uint256 amountRequired = uint256(zeroForOne ? amount0Delta : amount1Delta);
+
+            if (_useTransientBalance(address(this), tokenIn, 0, amountRequired)) {
+                safeTransfer(tokenIn, pool, amountRequired);
+            } else if (ethIn) {
+                wrapETH(pool, amountRequired);
+            } else {
+                safeTransferFrom(tokenIn, payer, pool, amountRequired);
+            }
+            if (ethOut) {
+                uint256 amountOut = uint256(-(zeroForOne ? amount1Delta : amount0Delta));
+                unwrapETH(amountOut);
+                _safeTransferETH(to, amountOut);
+            }
         }
     }
 
@@ -543,7 +613,7 @@ contract zRouter {
 
     // ** POOL HELPERS
 
-    function _v2PoolFor(address tokenA, address tokenB, bool sushi)
+    function _v2PoolFor(address tokenA, address tokenB)
         internal
         pure
         returns (address v2pool, bool zeroForOne)
@@ -557,9 +627,9 @@ contract zRouter {
                         keccak256(
                             abi.encodePacked(
                                 hex"ff",
-                                !sushi ? V2_FACTORY : SUSHI_FACTORY,
+                                V2_FACTORY,
                                 keccak256(abi.encodePacked(token0, token1)),
-                                !sushi ? V2_POOL_INIT_CODE_HASH : SUSHI_POOL_INIT_CODE_HASH
+                                V2_POOL_INIT_CODE_HASH
                             )
                         )
                     )
@@ -608,6 +678,48 @@ contract zRouter {
         }
     }
 
+    function _aeroPoolFor(address tokenA, address tokenB, bool stable)
+        internal
+        pure
+        returns (address aeroPool, bool zeroForOne)
+    {
+        (address token0, address token1, bool zF1) = _sortTokens(tokenA, tokenB);
+        zeroForOne = zF1;
+        bytes32 salt = keccak256(abi.encodePacked(token0, token1, stable));
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(add(ptr, 0x38), AERO_FACTORY)
+            mstore(add(ptr, 0x24), 0x5af43d82803e903d91602b57fd5bf3ff)
+            mstore(add(ptr, 0x14), AERO_IMPLEMENTATION)
+            mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73)
+            mstore(add(ptr, 0x58), salt)
+            mstore(add(ptr, 0x78), keccak256(add(ptr, 0x0c), 0x37))
+            aeroPool := keccak256(add(ptr, 0x43), 0x55)
+        }
+    }
+
+    function _aeroCLPoolFor(address tokenA, address tokenB, int24 tickSpacing)
+        internal
+        pure
+        returns (address aeroCLPool, bool zeroForOne)
+    {
+        (address token0, address token1, bool zF1) = _sortTokens(tokenA, tokenB);
+        zeroForOne = zF1;
+        bytes32 salt = keccak256(abi.encode(token0, token1, tickSpacing));
+        assembly ("memory-safe") {
+            let ptr := mload(0x40)
+            mstore(ptr, 0x3d602d80600a3d3981f3363d3d373d3d3d363d73000000000000000000000000)
+            mstore(add(ptr, 0x14), shl(0x60, AERO_CL_IMPLEMENTATION))
+            mstore(
+                add(ptr, 0x28), 0x5af43d82803e903d91602b57fd5bf3ff00000000000000000000000000000000
+            )
+            mstore(add(ptr, 0x38), shl(0x60, AERO_CL_FACTORY))
+            mstore(add(ptr, 0x4c), salt)
+            mstore(add(ptr, 0x6c), keccak256(ptr, 0x37))
+            aeroCLPool := keccak256(add(ptr, 0x37), 0x55)
+        }
+    }
+
     function _sortTokens(address tokenA, address tokenB)
         internal
         pure
@@ -615,19 +727,41 @@ contract zRouter {
     {
         (token0, token1) = (zeroForOne = tokenA < tokenB) ? (tokenA, tokenB) : (tokenB, tokenA);
     }
+
+    // FALLBACK CALLDATA COMPRESSION:
+    // Solady (https://github.com/Vectorized/solady/blob/main/src/utils/LibZip.sol)
+    fallback() external payable {
+        assembly ("memory-safe") {
+            if iszero(calldatasize()) { return(calldatasize(), calldatasize()) }
+            let o := 0
+            let f := not(3)
+            for { let i := 0 } lt(i, calldatasize()) {} {
+                let c := byte(0, xor(add(i, f), calldataload(i)))
+                i := add(i, 1)
+                if iszero(c) {
+                    let d := byte(0, xor(add(i, f), calldataload(i)))
+                    i := add(i, 1)
+                    mstore(o, not(0))
+                    if iszero(gt(d, 0x7f)) { calldatacopy(o, calldatasize(), add(d, 1)) }
+                    o := add(o, add(and(d, 0x7f), 1))
+                    continue
+                }
+                mstore8(o, c)
+                o := add(o, 1)
+            }
+            let success := delegatecall(gas(), address(), 0x00, o, codesize(), 0x00)
+            returndatacopy(0x00, 0x00, returndatasize())
+            if iszero(success) { revert(0x00, returndatasize()) }
+            return(0x00, returndatasize())
+        }
+    }
 }
 
 // Uniswap helpers:
 
-address constant V2_FACTORY = 0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
+address constant V2_FACTORY = 0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6;
 bytes32 constant V2_POOL_INIT_CODE_HASH =
     0x96e8ac4277198ff8b6f785478aa9a39f403cb768dd02cbee326c3e7da348845f;
-
-// ** SushiSwap:
-
-address constant SUSHI_FACTORY = 0xC0AEe478e3658e2610c5F7A4A2E1777cE9e4f2Ac;
-bytes32 constant SUSHI_POOL_INIT_CODE_HASH =
-    0xe18a34eb0e04b04f7a0ac29a6e80748dca96319b42c54d679cb821dca90c6303;
 
 interface IV2Pool {
     function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data)
@@ -635,7 +769,7 @@ interface IV2Pool {
     function getReserves() external view returns (uint112 reserve0, uint112 reserve1, uint32);
 }
 
-address constant V3_FACTORY = 0x1F98431c8aD98523631AE4a59f267346ea31F984;
+address constant V3_FACTORY = 0x33128a8fC17869897dcE68Ed026d694621f6FDfD;
 bytes32 constant V3_POOL_INIT_CODE_HASH =
     0xe34f199b19b2b4f47f68442619d555527d244f78a3297ea89325f843f87b8b54;
 uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
@@ -652,7 +786,7 @@ interface IV3Pool {
 }
 
 address constant V4_ROUTER = 0x00000000000044a361Ae3cAc094c9D1b14Eece97;
-address constant V4_POOL_MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
+address constant V4_POOL_MANAGER = 0x498581fF718922c3f8e6A244956aF099B2652b2b;
 
 interface IV4Router {
     function swap(bytes calldata data, uint256 deadline) external payable returns (int256);
@@ -701,11 +835,6 @@ library BalanceDeltaLibrary {
 // zAMM helpers:
 
 address constant ZAMM = 0x000000000000040470635EB91b7CE4D132D616eD;
-address constant ZAMM_0 = 0x00000000000008882D72EfA6cCE4B6a40b24C860;
-address constant CULT = 0x0000000000c5dc95539589fbD24BE07c6C14eCa4;
-address constant CULT_HOOK = 0x0000000000C625206C76dFd00bfD8d84A5Bfc948;
-uint256 constant CULT_ID =
-    57896044618658097711785492504343953926636021160616296542400437774503196477768;
 
 struct PoolKey {
     uint256 id0;
@@ -744,6 +873,20 @@ interface IZAMM {
         uint256 deadline
     ) external payable returns (uint256 amount0, uint256 amount1, uint256 liquidity);
 }
+
+// ** Aerodrome:
+
+address constant AERO_FACTORY = 0x420DD381b31aEf6683db6B902084cB0FFECe40Da;
+address constant AERO_IMPLEMENTATION = 0xA4e46b4f701c62e14DF11B48dCe76A7d793CD6d7;
+
+interface IAeroPool {
+    function swap(uint256 amount0Out, uint256 amount1Out, address to, bytes calldata data)
+        external;
+    function getAmountOut(uint256 amountIn, address tokenIn) external view returns (uint256);
+}
+
+address constant AERO_CL_FACTORY = 0x5e7BB104d84c7CB9B682AaC2F3d509f5F406809A;
+address constant AERO_CL_IMPLEMENTATION = 0xeC8E5342B19977B4eF8892e02D8DAEcfa1315831;
 
 // Solady safe transfer helpers:
 
@@ -829,7 +972,7 @@ interface IERC6909 {
 
 // Low-level WETH helpers - we know WETH so we can make assumptions:
 
-address constant WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2;
+address constant WETH = 0x4200000000000000000000000000000000000006;
 
 function wrapETH(address pool, uint256 amount) {
     assembly ("memory-safe") {
