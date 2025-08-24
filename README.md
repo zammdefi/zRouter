@@ -19,11 +19,17 @@ Features:
 
 Deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835).
 
-Router helper (`zQuoter`) deployed to [0xC802D186BdFC8F53F35dF9B424CAf13f5AC5aec7](https://contractscan.xyz/contract/0xC802D186BdFC8F53F35dF9B424CAf13f5AC5aec7).
+Router helper (`zQuoter`) deployed to [0x9a5414424725269b6c853822b2b6c7e6dbeaf472](https://contractscan.xyz/contract/0x9a5414424725269b6c853822b2b6c7e6dbeaf472).
 
 Great for bots, on-the-fly strategies, and aggregation.
 
 Bonus: Includes V2-style SushiSwap pools in `swapV2()`.
+
+Base Router helper (`zQuoter`) deployed to [0x69c644eBE4A792f601eDddF593c32DDEc35eC5D7](https://contractscan.xyz/contract/0x69c644eBE4A792f601eDddF593c32DDEc35eC5D7).
+
+## Base deployment
+
+Supports Aerodrome methods, `swapAero()`, `swapAeroCL()`. No SushiSwap. Otherwise ABI and Uniswap methods remain the same.
 
 ## Security note
 
