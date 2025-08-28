@@ -27,8 +27,6 @@ Great for bots, on-the-fly strategies, and aggregation.
 
 Bonus: Includes V2-style SushiSwap pools in `swapV2()`.
 
-Base Router helper (`zQuoter`) deployed to [0x69c644eBE4A792f601eDddF593c32DDEc35eC5D7](https://contractscan.xyz/contract/0x69c644eBE4A792f601eDddF593c32DDEc35eC5D7).
-
 ## Base deployment
 
 Supports Aerodrome methods, `swapAero()`, `swapAeroCL()`. No SushiSwap. Otherwise ABI and Uniswap methods remain the same.
