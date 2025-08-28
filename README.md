@@ -17,9 +17,11 @@ Features:
 - bridges all liquid ERC20s with ERC6909 finance on zAMM
 - includes WETH abstraction for all ETH input and output
 
-Deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835).
+Deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835) on Ethereum and Base.
 
-Router helper (`zQuoter`) deployed to [0x9a5414424725269b6c853822b2b6c7e6dbeaf472](https://contractscan.xyz/contract/0x9a5414424725269b6c853822b2b6c7e6dbeaf472).
+Router helper (`zQuoter`) deployed to [0x658bF1A6608210FDE7310760f391AD4eC8006A5F](https://etherscan.io/address/0x658bf1a6608210fde7310760f391ad4ec8006a5f#code).
+
+And [0x3A67fCEb9E666Dcf01bBD486B1D3596d0C1622DC](https://basescan.org/address/0x3A67fCEb9E666Dcf01bBD486B1D3596d0C1622DC#code) on Base.
 
 Great for bots, on-the-fly strategies, and aggregation.
 
