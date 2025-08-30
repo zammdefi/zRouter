@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
   <head>
@@ -683,7 +682,7 @@
         return {
           expectedOutput,
           multicallCompressed: r.multicallCompressed,
-          msgValue: r.msgValue || 0n,
+          msgValue: r.msgValue ?? 0n,
           isTwoHop,
           sourceA,
           sourceB,
@@ -748,9 +747,26 @@
 
 
           swapBtn.textContent = "Swapping...";
-          const txValue =
-            (fromData.address === ZERO_ADDRESS ? amountIn : 0n) +
-            (quote.msgValue || 0n);
+          // Use ONLY what the quoter says to send.
+          // For ETH exact-in this will equal `amountIn`;
+          // for ERC-20 it will be 0n; for exact-out it will be the max-in.
+          const txValue = quote.msgValue ?? 0n;
+
+
+          // (optional) sanity guards during dev:
+          if (fromData.address === ZERO_ADDRESS && txValue !== amountIn) {
+            console.warn("Unexpected: ETH exact-in but msgValue != amountIn", {
+              txValue,
+              amountIn,
+            });
+          }
+          if (fromData.address !== ZERO_ADDRESS && txValue !== 0n) {
+            console.warn("Unexpected: non-zero msgValue for ERC-20 input", {
+              txValue,
+            });
+          }
+
+
           const swapTx = await signer.sendTransaction({
             to: ZROUTER_ADDRESS,
             data: quote.multicallCompressed,
