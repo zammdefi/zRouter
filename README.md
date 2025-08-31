@@ -21,7 +21,7 @@ Deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xy
 
 Router helper (`zQuoter`) deployed to [0x658bF1A6608210FDE7310760f391AD4eC8006A5F](https://etherscan.io/address/0x658bf1a6608210fde7310760f391ad4ec8006a5f#code).
 
-And [0x3A67fCEb9E666Dcf01bBD486B1D3596d0C1622DC](https://basescan.org/address/0x3A67fCEb9E666Dcf01bBD486B1D3596d0C1622DC#code) on Base.
+And [0x772E2810A471dB2CC7ADA0d37D6395476535889a](https://basescan.org/address/0x772E2810A471dB2CC7ADA0d37D6395476535889a#code) on Base.
 
 Great for bots, on-the-fly strategies, and aggregation.
 
