@@ -24,6 +24,8 @@ contract zQuoterLens {
         uint256 amountOut;
     }
 
+    constructor() payable {}
+
     function getQuotes(bool exactOut, address tokenIn, address tokenOut, uint256 swapAmount)
         public
         view
@@ -124,6 +126,8 @@ contract zQuoter is zQuoterLens {
     error NoRoute();
     error ZeroAmount();
     error UnsupportedAMM();
+
+    constructor() payable {}
 
     function _buildV2Swap(
         address to,
@@ -314,24 +318,15 @@ contract zQuoter is zQuoterLens {
                     to, exactOut, tokenIn, tokenOut, swapAmount, slippageBps, deadline
                 );
 
-                // assemble: swap + safety sweeps:
-                n = 1 /*swap*/ + 2 /*sweep WETH+ETH*/
-                    + ((tokenIn != address(0) && tokenIn != WETH) ? 1 : 0);
-                calls = new bytes[](n);
-                calls[k++] = callData;
-                calls[k++] = abi.encodeWithSelector(IRouterExt.sweep.selector, WETH, 0, 0, refundTo);
-                calls[k++] =
-                    abi.encodeWithSelector(IRouterExt.sweep.selector, address(0), 0, 0, refundTo);
-                if (tokenIn != address(0) && tokenIn != WETH) {
-                    calls[k++] =
-                        abi.encodeWithSelector(IRouterExt.sweep.selector, tokenIn, 0, 0, refundTo);
-                }
+                // No sweeps; router won’t strand dust even if `to == ZROUTER`
+                calls = new bytes[](1);
+                calls[0] = callData;
 
                 // return (a=best, b=empty):
                 a = best;
                 b = Quote(AMM.UNI_V2, 0, 0, 0);
                 msgValue = val;
-                // Encoded calldata to send to ZROUTER (value = msgValue):
+
                 multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, calls);
                 return (a, b, calls, multicall, msgValue);
             }
@@ -345,38 +340,33 @@ contract zQuoter is zQuoterLens {
 
             if (!exactOut) {
                 // overall exactIn:
-                // leg A: exactIn tokenIn -> WETH:
                 (a,) = getQuotes(false, tokenIn, MID, swapAmount);
                 if (a.amountOut == 0) revert NoRoute();
 
-                // min WETH to enforce for hop-1:
-                midAmtForLeg2 = SlippageLib.limit(false, a.amountOut, slippageBps);
+                midAmtForLeg2 = SlippageLib.limit(false, a.amountOut, slippageBps); // min mid for hop-2
                 leg1AmountLimit = midAmtForLeg2;
 
-                // leg B: exactIn WETH -> tokenOut on that min WETH:
                 (b,) = getQuotes(false, MID, tokenOut, midAmtForLeg2);
                 if (b.amountOut == 0) revert NoRoute();
                 leg2AmountLimit = SlippageLib.limit(false, b.amountOut, slippageBps);
             } else {
-                // leg B: exactOut WETH -> tokenOut:
+                // overall exactOut:
                 (b,) = getQuotes(true, MID, tokenOut, swapAmount);
                 if (b.amountIn == 0) revert NoRoute();
                 uint256 midRequired = b.amountIn;
                 uint256 midLimit = SlippageLib.limit(true, midRequired, slippageBps); // hop-2 maxIn
                 leg2AmountLimit = midLimit;
 
-                // If hop-2 is V2/Aero, prefund exactly the quoted input; otherwise produce up to the limit:
                 bool prefundV2 = (b.source == AMM.UNI_V2 || b.source == AMM.AERO);
                 uint256 midToProduce = prefundV2 ? midRequired : midLimit;
 
-                // leg A: exactOut tokenIn -> WETH to mint `midToProduce`
                 (a,) = getQuotes(true, tokenIn, MID, midToProduce);
                 if (a.amountIn == 0) revert NoRoute();
                 leg1AmountLimit = SlippageLib.limit(true, a.amountIn, slippageBps);
                 midAmtForLeg2 = midToProduce;
             }
 
-            // hop-1 recipient: pool-prefund only for V2/Aero in overall exactOut; otherwise land at router:
+            // hop-1 recipient: pool-prefund only for V2/Aero in overall exactOut; otherwise router
             address leg1To = ZROUTER;
             if (exactOut && (b.source == AMM.UNI_V2 || b.source == AMM.AERO)) {
                 address tOut = tokenOut;
@@ -404,7 +394,7 @@ contract zQuoter is zQuoterLens {
                 deadline
             );
 
-            // build hop-2
+            // build hop-2:
             bytes memory legBData = _buildCallForQuote(
                 b,
                 to,
@@ -418,29 +408,33 @@ contract zQuoter is zQuoterLens {
                 deadline
             );
 
-            // safety sweeps (return router-held dust to refundTo):
+            // safety sweeps (return router-held dust to refundTo)
             bool zamm2ExactOut = exactOut && (b.source == AMM.ZAMM);
 
-            bytes memory sweepWETHBack = zamm2ExactOut
-                ? bytes("")
-                : abi.encodeWithSelector(IRouterExt.sweep.selector, WETH, 0, 0, refundTo);
-            bytes memory sweepETHBack = zamm2ExactOut
-                ? bytes("")
-                : abi.encodeWithSelector(IRouterExt.sweep.selector, address(0), 0, 0, refundTo);
-            bytes memory sweepInBack = (tokenIn != WETH)
-                ? abi.encodeWithSelector(IRouterExt.sweep.selector, tokenIn, 0, 0, refundTo)
-                : bytes("");
+            // Only need mid sweep when hop-1 lands mid at router and hop-2 isn't zAMM exact-out
+            bool needWethSweep = (!zamm2ExactOut) && (leg1To == ZROUTER);
 
-            // assemble calls (only non-empty):
-            n = 2 + (sweepWETHBack.length > 0 ? 1 : 0) + (sweepETHBack.length > 0 ? 1 : 0)
-                + (sweepInBack.length > 0 ? 1 : 0);
+            // If hop-1 is zAMM exact-out to the router, zRouter pre-pulls up to amountLimit;
+            // any leftover tokenIn would otherwise sit on the router
+            bool needInSweep = (a.source == AMM.ZAMM) && exactOut && (leg1To == ZROUTER);
+
+            // assemble calls
+            n = 2 + (needWethSweep ? 2 : 0) + (needInSweep ? 1 : 0); // unwrap + sweep(ETH) if needed
             calls = new bytes[](n);
             k = 0;
             calls[k++] = legAData;
             calls[k++] = legBData;
-            if (sweepWETHBack.length > 0) calls[k++] = sweepWETHBack;
-            if (sweepETHBack.length > 0) calls[k++] = sweepETHBack;
-            if (sweepInBack.length > 0) calls[k++] = sweepInBack;
+
+            if (needWethSweep) {
+                // unwrap all router-held WETH then sweep ETH to refundTo
+                calls[k++] = abi.encodeWithSelector(IRouterExt.unwrap.selector, 0);
+                calls[k++] =
+                    abi.encodeWithSelector(IRouterExt.sweep.selector, address(0), 0, 0, refundTo);
+            }
+            if (needInSweep) {
+                calls[k++] =
+                    abi.encodeWithSelector(IRouterExt.sweep.selector, tokenIn, 0, 0, refundTo);
+            }
 
             // Encoded calldata to send to ZROUTER (value = msgValue):
             multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, calls);
@@ -718,6 +712,7 @@ address constant ZROUTER = 0x0000000000404FECAf36E6184245475eE1254835;
 interface IRouterExt {
     function multicall(bytes[] calldata data) external payable returns (bytes[] memory);
     function sweep(address token, uint256 id, uint256 amount, address to) external payable;
+    function unwrap(uint256 amount) external payable; // <-- add this
 }
 
 interface IZRouter {
