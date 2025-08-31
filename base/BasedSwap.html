@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Based Swap</title>
+    <title>Based Swap by zAMM</title>
     <link
       rel="icon"
       href="https://content.wrappr.wtf/ipfs/bafybeibuct6mftnmgzkbn4tq47elpokbkahkjxq7z6qceptlcsvpxletou"
@@ -40,7 +40,7 @@
         padding: 20px;
       }
       .container {
-        background: #f5f5f5;
+        background: #f9f9f9;
         border-radius: 16px;
         padding: 32px;
         width: 100%;
@@ -98,7 +98,7 @@
         display: flex;
         align-items: center;
         gap: 8px;
-        background: #f5f5f5;
+        background: #f9f9f9;
         border: 2px solid #000;
         padding: 6px 10px;
         border-radius: 6px;
@@ -128,6 +128,66 @@
       .amount-input::placeholder {
         color: #999;
       }
+      .slip-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .slip-unit {
+        color: #4b5563;
+        font-weight: 600;
+      }
+      .slip-inline {
+        cursor: text;
+      }
+      .slip-unit {
+        pointer-events: none;
+      }
+      .slip-num {
+        -webkit-appearance: none;
+        appearance: textfield;
+        background: transparent;
+        border: 0;
+        border-bottom: 2px solid rgba(0, 0, 0, 0.25);
+        border-radius: 0;
+        padding: 2px 0;
+        width: 4.5ch;
+        min-width: 3.5ch;
+        text-align: right;
+        font-size: 14px;
+        color: #0f172a;
+        outline: none;
+        transition: border-color 0.15s ease, color 0.15s ease;
+      }
+      .slip-num:hover {
+        border-bottom-color: rgba(0, 0, 0, 0.45);
+      }
+      .slip-num:focus {
+        border-bottom-color: #000;
+      }
+      .slip-num::-webkit-outer-spin-button,
+      .slip-num::-webkit-inner-spin-button {
+        -webkit-appearance: none;
+        margin: 0;
+      }
+      .slip-num[type="number"] {
+        -moz-appearance: textfield;
+      }
+      @media (prefers-color-scheme: dark) {
+        .slip-unit {
+          color: #cbd5e1;
+        }
+        .slip-num {
+          color: #e5e7eb;
+          border-bottom-color: rgba(255, 255, 255, 0.35);
+        }
+        .slip-num:hover {
+          border-bottom-color: rgba(255, 255, 255, 0.55);
+        }
+        .slip-num:focus {
+          border-bottom-color: #fff;
+        }
+      }
       .balance {
         font-size: 14px;
         color: #666;
@@ -141,7 +201,7 @@
         position: relative;
       }
       .arrow-btn {
-        background: #f5f5f5;
+        background: #f9f9f9;
         border: 2px solid #000;
         border-radius: 8px;
         padding: 8px;
@@ -172,6 +232,36 @@
         background: #ccc;
         cursor: not-allowed;
       }
+      .token-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .token-subactions {
+        display: flex;
+        justify-content: flex-end;
+        margin: 6px 0;
+      }
+      .max-btn {
+        padding: 4px 10px;
+        border: 2px solid #000;
+        background: #fff;
+        color: #000;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+      .max-btn:hover {
+        background: #000;
+        color: #fff;
+      }
+      .max-btn:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
       .quote-info {
         border: 1px solid #000;
         border-radius: 8px;
@@ -179,11 +269,31 @@
         margin-top: 16px;
         font-size: 14px;
         color: #000;
+        overflow: hidden;
       }
       .quote-row {
         display: flex;
-        justify-content: space-between;
-        margin-bottom: 4px;
+        align-items: center;
+        gap: 8px;
+      }
+      .quote-row > :nth-child(2) {
+        margin-left: auto;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        text-align: right;
+      }
+      #routeInfo {
+        max-width: 65%;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      #routeInfo[data-size="sm"] {
+        font-size: 13px;
+      }
+      #routeInfo[data-size="xs"] {
+        font-size: 12px;
       }
       .loading {
         display: inline-block;
@@ -254,8 +364,6 @@
       .token-list-item:hover {
         background: #f0f0f0;
       }
-
-
       .page-stack {
         display: flex;
         flex-direction: column;
@@ -283,17 +391,6 @@
         <h1>Based Swap</h1>
 
 
-        <div class="system-info">
-          <div class="system-tagline">
-            Cheapest Swaps on Base. Best Rates. 6 AMMs.
-          </div>
-          <div class="system-features">
-            Fully onchain • No dependencies • Immutable •
-          </div>
-        </div>
-        <br /><br />
-
-
         <div class="branding">
           <img
             src="https://content.wrappr.wtf/ipfs/bafkreifquimjbbzmuktrsugeqdkzp26cxmpcfcvoufwy6oyruhxs7kpa7u"
@@ -315,6 +412,11 @@
               <span id="fromTokenIcon" class="token-icon"></span>
               <span id="fromTokenSymbol" class="token-symbol">ETH</span>
             </div>
+          </div>
+          <div class="token-subactions">
+            <button class="max-btn" type="button" onclick="setMaxFromBalance()">
+              MAX
+            </button>
           </div>
           <input
             type="number"
@@ -366,7 +468,23 @@
           <div class="quote-row">
             <span>Route:</span><span id="routeInfo">--</span>
           </div>
-          <div class="quote-row"><span>Slippage:</span><span>0.5%</span></div>
+          <div class="quote-row">
+            <span>Slippage:</span>
+            <span class="slip-inline">
+              <input
+                id="slippagePct"
+                class="slip-num"
+                type="number"
+                inputmode="decimal"
+                min="0"
+                max="20"
+                step="0.1"
+                value="0.5"
+                aria-label="Slippage (%)"
+              />
+              <span class="slip-unit">%</span>
+            </span>
+          </div>
         </div>
 
 
@@ -393,6 +511,10 @@
           rel="noopener noreferrer"
           >z0r0z</a
         >
+      </div>
+      <div class="attribution" style="font-style: italic; margin-top: 6px">
+        100% onchain DEX solver. No fees. Best rates from Uniswap, Aerodrome &
+        zAMM. Calldata compressed to save 50% on gas.
       </div>
     </div>
 
@@ -423,11 +545,13 @@
 
     <script>
       const CHAIN_ID = 8453; // Base
-      const ZQUOTER_ADDRESS = "0x3A67fCEb9E666Dcf01bBD486B1D3596d0C1622DC";
+      const ZQUOTER_ADDRESS = "0x772E2810A471dB2CC7ADA0d37D6395476535889a";
       const ZROUTER_ADDRESS = "0x0000000000404FECAf36E6184245475eE1254835";
       const USDC_ADDRESS = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913";
-      const WETH_ADDRESS = "0x4200000000000000000000000000000000000006";
-      const WBTC_ADDRESS = "0x0555E30da8f98308EdB960aa94C0Db47230d2B9c";
+      const USDT_ADDRESS = "0xfde4C96c8593536E31F229EA8f37b2ADa2699bb2";
+      const CBBTC_ADDRESS = "0xcbB7C0000aB88B473b1f5aFd9ef808440eed33Bf";
+      const WSTETH_ADDRESS = "0xc1CBa3fCea344f92D9239c08C0568f6F2F0ee452";
+      const ZORA_ADDRESS = "0x1111111111166b7FE7bd91427724B487980aFc69";
       const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 
 
@@ -436,7 +560,10 @@
       const tokens = {
         ETH: { address: ZERO_ADDRESS, symbol: "ETH", decimals: 18 },
         USDC: { address: USDC_ADDRESS, symbol: "USDC", decimals: 6 },
-        WBTC: { address: WBTC_ADDRESS, symbol: "WBTC", decimals: 8 },
+        USDT: { address: USDT_ADDRESS, symbol: "USDT", decimals: 6 },
+        cbBTC: { address: CBBTC_ADDRESS, symbol: "cbBTC", decimals: 8 },
+        wstETH: { address: WSTETH_ADDRESS, symbol: "wstETH", decimals: 18 },
+        ZORA: { address: ZORA_ADDRESS, symbol: "ZORA", decimals: 18 },
       };
 
 
@@ -444,11 +571,79 @@
       let toToken = "USDC";
 
 
+      let slippageBps = 50; // default 0.5%
+
+
       // Icons
       const ETH_ICON = `<svg fill="#000000" width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill-rule="evenodd"><path d="M16 32C7.163 32 0 24.837 0 16S7.163 0 16 0s16 7.163 16 16-7.163 16-16 16zm7.994-15.781L16.498 4 9 16.22l7.498 4.353 7.496-4.354zM24 17.616l-7.502 4.351L9 17.617l7.498 10.378L24 17.616z"/><g fill-rule="nonzero"><path fill-opacity=".298" d="M16.498 4v8.87l7.497 3.35zm0 17.968v6.027L24 17.616z"/><path fill-opacity=".801" d="M16.498 20.573l7.497-4.353-7.497-3.348z"/><path fill-opacity=".298" d="M9 16.22l7.498 4.353v-7.701z"/></g></g></svg>`;
       const USDC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
-      const WBTC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path fill="#FFF" fill-rule="nonzero" d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></g></svg>`;
+      const USDT_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>`;
+      const CBBTC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path fill="#FFF" fill-rule="nonzero" d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></g></svg>`;
+      const WSTETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M9.437 14.864l-.181.275c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 0 0 0 0-6.536-12.452z" fill="#FFF"/><path opacity=".6" d="M15.997 18.611l-6.56-3.747c6.56 12.452 6.56 12.452 6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".6" d="M22.563 14.864l.181.275c2.048 3.097 1.603 7.253-1.034 9.824-1.561 1.521-3.622 2.353-5.683 2.353 0 0 0 0 6.536-12.452z" fill="#FFF"/><path opacity=".2" d="M16.003 18.611l6.56-3.747c-6.56 12.452-6.56 12.452-6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/></g></svg>`;
+      const ZORA_ICON = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><filter id="blur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur in="SourceGraphic" stdDeviation="12"/></filter><filter id="mediumBlur" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur in="SourceGraphic" stdDeviation="6"/></filter><filter id="softBlur"><feGaussianBlur in="SourceGraphic" stdDeviation="3"/></filter><radialGradient id="darkBase" cx="60%" cy="60%"><stop offset="0%" style="stop-color:#2C3E50;stop-opacity:1" /><stop offset="40%" style="stop-color:#1A252F;stop-opacity:1" /><stop offset="70%" style="stop-color:#0F1419;stop-opacity:1" /><stop offset="100%" style="stop-color:#000000;stop-opacity:1" /></radialGradient><radialGradient id="cyanGlow" cx="50%" cy="50%"><stop offset="0%" style="stop-color:#00FFFF;stop-opacity:1" /><stop offset="30%" style="stop-color:#00E5E5;stop-opacity:1" /><stop offset="60%" style="stop-color:#00CCCC;stop-opacity:0.8" /><stop offset="100%" style="stop-color:#0099CC;stop-opacity:0" /></radialGradient><radialGradient id="iridescent" cx="50%" cy="50%"><stop offset="0%" style="stop-color:#FFFFFF;stop-opacity:1" /><stop offset="20%" style="stop-color:#FFB3E6;stop-opacity:0.9" /><stop offset="40%" style="stop-color:#E6FFFF;stop-opacity:0.8" /><stop offset="60%" style="stop-color:#B3FFB3;stop-opacity:0.6" /><stop offset="100%" style="stop-color:#66CCFF;stop-opacity:0" /></radialGradient><clipPath id="circleClip"><circle cx="100" cy="100" r="90"/></clipPath></defs><circle cx="100" cy="100" r="90" fill="url(#darkBase)"/><g clip-path="url(#circleClip)"><ellipse cx="65" cy="65" rx="70" ry="75" fill="#0099CC" opacity="0.7" transform="rotate(-30 65 65)" filter="url(#blur)"/><ellipse cx="60" cy="55" rx="55" ry="60" fill="#00CCCC" opacity="0.8" transform="rotate(-25 60 55)" filter="url(#mediumBlur)"/><ellipse cx="55" cy="45" rx="40" ry="45" fill="#00E5E5" opacity="0.9" transform="rotate(-20 55 45)" filter="url(#mediumBlur)"/><ellipse cx="50" cy="40" rx="30" ry="32" fill="#00FFFF" opacity="0.7" transform="rotate(-15 50 40)" filter="url(#softBlur)"/></g><g clip-path="url(#circleClip)"><ellipse cx="48" cy="35" rx="20" ry="18" fill="url(#iridescent)" opacity="0.9" transform="rotate(-10 48 35)"/><ellipse cx="45" cy="32" rx="15" ry="12" fill="#FF66CC" opacity="0.4" filter="url(#softBlur)"/><ellipse cx="43" cy="30" rx="10" ry="8" fill="#FFFFFF" opacity="0.6" filter="url(#softBlur)"/><ellipse cx="50" cy="35" rx="12" ry="10" fill="#CCFF66" opacity="0.2" filter="url(#softBlur)"/></g><g clip-path="url(#circleClip)"><path d="M 90 170 Q 130 150, 160 120 T 180 70 Q 170 100, 150 130 T 90 170" fill="#0F0A05" opacity="0.7" filter="url(#blur)"/><path d="M 20 130 Q 30 160, 60 180 T 100 190 Q 70 180, 40 160 T 20 130" fill="#1A0F0A" opacity="0.6" filter="url(#mediumBlur)"/></g><circle cx="100" cy="100" r="89" fill="none" stroke="#000000" stroke-width="2" opacity="0.5"/></svg>`;
       const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#000" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="#000" font-size="12" font-weight="bold">?</text></svg>`;
+
+
+      function makeLetterIcon(sym) {
+        try {
+          const full = String(sym ?? "").trim();
+          const clean = full.toUpperCase().replace(/[^A-Z0-9]/g, "") || "?";
+
+
+          // Show up to 5 chars; beyond that, 4 + ellipsis
+          const show = clean.length <= 5 ? clean : clean.slice(0, 4) + "…";
+          const L = show.length;
+
+
+          const fontSize =
+            L <= 1
+              ? 8.2
+              : L === 2
+              ? 7.4
+              : L === 3
+              ? 6.3
+              : L === 4
+              ? 5.4
+              : /* L >= 5 */ 4.6;
+
+
+          // Deterministic hue from symbol
+          const hue = [...clean].reduce(
+            (a, c) => (a * 31 + c.charCodeAt(0)) % 360,
+            0
+          );
+
+
+          // Minimal SVG (no textLength/letter-spacing) to avoid browser quirks
+          return (
+            `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="${escAttr(
+              full
+            )}">` +
+            `<title>${escText(full)}</title>` +
+            `<circle cx="12" cy="12" r="11" fill="hsl(${hue},70%,55%)" stroke="#000" stroke-width="2"/>` +
+            `<text x="12" y="12.2" text-anchor="middle" dominant-baseline="middle"` +
+            ` font-family="-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Oxygen,Ubuntu,sans-serif"` +
+            ` font-size="${fontSize}" font-weight="700" fill="#fff">${escText(
+              show
+            )}</text>` +
+            `</svg>`
+          );
+        } catch (e) {
+          console.warn("makeLetterIcon fallback:", e);
+          return DEFAULT_ICON; // your existing fallback
+        }
+      }
+
+
+      function escText(s) {
+        return String(s).replace(
+          /[&<>]/g,
+          (m) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[m])
+        );
+      }
+      function escAttr(s) {
+        return escText(s).replace(/"/g, "&quot;");
+      }
 
 
       // Helpers
@@ -565,11 +760,11 @@
 
       const AMM_NAMES = {
         0: "Uniswap V2",
-        1: "Aerodrome",
+        1: "Aerodrome V1",
         2: "zAMM",
         3: "Uniswap V3",
         4: "Uniswap V4",
-        5: "Aerodrome CL",
+        5: "Aerodrome Slipstream",
       };
 
 
@@ -611,7 +806,7 @@
             const route = quote.isTwoHop
               ? `${quote.sourceA} + ${quote.sourceB}`
               : `${quote.sourceA}`;
-            document.getElementById("routeInfo").textContent = route;
+            fitRouteText(route);
             document.getElementById("quoteInfo").style.display = "block";
 
 
@@ -643,14 +838,129 @@
       }
 
 
+      async function setMaxFromBalance() {
+        try {
+          if (!provider || !account) {
+            await connectWallet();
+            if (!provider || !account) return;
+          }
+
+
+          const f = tokens[fromToken];
+          let raw;
+
+
+          if (f.address === ZERO_ADDRESS) {
+            // Native ETH: use 98% to leave gas buffer
+            raw = await provider.getBalance(account);
+            raw = (raw * 98n) / 100n; // 98%
+            if (raw < 0n) raw = 0n;
+          } else {
+            // ERC-20: full balance
+            const c = new ethers.Contract(
+              f.address,
+              ["function balanceOf(address) view returns (uint256)"],
+              provider
+            );
+            raw = await c.balanceOf(account);
+          }
+
+
+          // Format, trim trailing zeros, and set input
+          const maxStr = ethers.formatUnits(raw, f.decimals);
+          const pretty = maxStr.includes(".")
+            ? maxStr.replace(/\.?0+$/, "")
+            : maxStr;
+
+
+          const input = document.getElementById("fromAmount");
+          input.value = pretty || "0";
+          handleAmountChange();
+        } catch (e) {
+          console.error("MAX error:", e);
+        }
+      }
+
+
+      // clamp + read slippage from input; only write back when finalize=true
+      const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+      function readSlippage(finalize = false) {
+        const el = document.getElementById("slippagePct");
+        if (!el) return;
+
+
+        const raw = el.value;
+        let v = parseFloat(raw);
+
+
+        if (Number.isFinite(v)) {
+          v = clamp(v, 0, 20);
+          slippageBps = Math.round(v * 100);
+          if (finalize) el.value = String(v);
+        } else if (finalize) {
+          // if invalid on finalize, snap UI back to current bps (or default 0.5)
+          if (!Number.isFinite(slippageBps)) slippageBps = 50;
+          el.value = String(clamp(slippageBps / 100, 0, 20));
+        }
+      }
+
+
+      // re-quote when user edits slippage (if amount present), debounce a bit
+      function initSimpleSlippage() {
+        const el = document.getElementById("slippagePct");
+        if (!el || el.dataset.inited === "1") return;
+        el.dataset.inited = "1";
+
+
+        readSlippage(false);
+
+
+        const reQuote = debounce(() => {
+          const amt = document.getElementById("fromAmount")?.value;
+          if (amt) handleAmountChange();
+        }, 250);
+
+
+        // typing: update internal value but don't overwrite user's text yet
+        el.addEventListener("input", () => {
+          readSlippage(false);
+          reQuote();
+        });
+
+
+        // leaving field: clamp & normalize the text
+        el.addEventListener("blur", () => {
+          readSlippage(true);
+          reQuote();
+        });
+
+
+        // ArrowUp/ArrowDown to step (even with hidden spinners)
+        el.addEventListener("keydown", (e) => {
+          if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+          e.preventDefault();
+          const step = parseFloat(el.step || "0.01") || 0.01;
+          const digits = (String(step).split(".")[1] || "").length;
+          const cur = parseFloat(el.value || "0") || 0;
+          const dir = e.key === "ArrowUp" ? 1 : -1;
+          const next = clamp(cur + dir * step, 0, 20);
+          el.value = next.toFixed(digits);
+          readSlippage(true);
+          reQuote();
+        });
+      }
+      document.addEventListener("DOMContentLoaded", initSimpleSlippage);
+
+
       async function getQuote(fromAmount) {
         if (!account) throw new Error("Connect wallet to get a quote");
         const fromData = tokens[fromToken],
           toData = tokens[toToken];
         if (fromData.address === toData.address) throw new Error("Same token");
         const amountIn = ethers.parseUnits(fromAmount, fromData.decimals);
-        const slippageBps = 50; // 0.5%
-        const deadline = Math.floor(Date.now() / 1000) + 300;
+        readSlippage(true); // sync from input (0–20%)
+        const sbps = slippageBps; // bps for quoter
+        const deadline = BigInt(Math.floor(Date.now() / 1000) + 300);
 
 
         const quoterAbi = [
@@ -668,7 +978,7 @@
           fromData.address,
           toData.address,
           amountIn,
-          slippageBps,
+          BigInt(sbps),
           deadline
         );
 
@@ -827,12 +1137,29 @@
       }
 
 
+      function fitRouteText(route) {
+        const el = document.getElementById("routeInfo");
+        el.textContent = route; // set visible text
+        el.title = route; // full value on hover
+        el.removeAttribute("data-size");
+
+
+        // Nudge font size down for especially long routes
+        const len = route.length;
+        if (len > 48) el.setAttribute("data-size", "xs");
+        else if (len > 32) el.setAttribute("data-size", "sm");
+      }
+
+
       function updateTokenDisplay() {
         const setIcon = (el, sym) => {
           if (sym === "ETH") el.innerHTML = ETH_ICON;
           else if (sym === "USDC") el.innerHTML = USDC_ICON;
-          else if (sym === "WBTC") el.innerHTML = WBTC_ICON;
-          else el.innerHTML = DEFAULT_ICON;
+          else if (sym === "USDT") el.innerHTML = USDT_ICON;
+          else if (sym === "cbBTC") el.innerHTML = CBBTC_ICON;
+          else if (sym === "wstETH") el.innerHTML = WSTETH_ICON;
+          else if (sym === "ZORA") el.innerHTML = ZORA_ICON;
+          else el.innerHTML = makeLetterIcon(sym);
         };
         setIcon(document.getElementById("fromTokenIcon"), fromToken);
         document.getElementById("fromTokenSymbol").textContent =
@@ -860,8 +1187,11 @@
           iconSpan.className = "token-icon";
           if (symbol === "ETH") iconSpan.innerHTML = ETH_ICON;
           else if (symbol === "USDC") iconSpan.innerHTML = USDC_ICON;
-          else if (symbol === "WBTC") iconSpan.innerHTML = WBTC_ICON;
-          else iconSpan.innerHTML = DEFAULT_ICON;
+          else if (symbol === "USDT") iconSpan.innerHTML = USDT_ICON;
+          else if (symbol === "cbBTC") iconSpan.innerHTML = CBBTC_ICON;
+          else if (symbol === "wstETH") iconSpan.innerHTML = WSTETH_ICON;
+          else if (symbol === "ZORA") iconSpan.innerHTML = ZORA_ICON;
+          else iconSpan.innerHTML = makeLetterIcon(symbol);
 
 
           const nameSpan = document.createElement("span");
