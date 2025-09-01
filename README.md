@@ -31,6 +31,8 @@ Bonus: Includes V2-style SushiSwap pools in `swapV2()`.
 
 Supports Aerodrome methods, `swapAero()`, `swapAeroCL()`. No SushiSwap. Otherwise ABI and Uniswap methods remain the same.
 
+Onchain dapp deployment: [base.zamm.eth](https://base.zamm.eth.limo)
+
 ## Security note
 
 Ensure atomic token allowances for best security. Previous versions may not have allowance guard.
