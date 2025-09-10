@@ -5,7 +5,7 @@ interface IzRouter {
     // ══════════════════════════════════════════════════════════════════════════════
     // ERRORS
     // ══════════════════════════════════════════════════════════════════════════════
-    
+
     error BadSwap();
     error Expired();
     error Slippage();
@@ -242,11 +242,9 @@ interface IzRouter {
     /// @param amount0Delta Amount of token0 owed to the pool
     /// @param amount1Delta Amount of token1 owed to the pool
     /// @param data Encoded callback data
-    function uniswapV3SwapCallback(
-        int256 amount0Delta,
-        int256 amount1Delta,
-        bytes calldata data
-    ) external payable;
+    function uniswapV3SwapCallback(int256 amount0Delta, int256 amount1Delta, bytes calldata data)
+        external
+        payable;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════

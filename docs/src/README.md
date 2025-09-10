@@ -1,6 +1,6 @@
-# [zRouter](https://github.com/zammdefi/zRouter)  [![License:MIT](https://img.shields.io/badge/License-MIT-black.svg)](https://opensource.org/license/mit) [![solidity](https://img.shields.io/badge/solidity-%5E0.8.30-black)](https://docs.soliditylang.org/en/v0.8.30/) [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-000000.svg)](https://getfoundry.sh/)
+# [zRouter](https://github.com/zammdefi/zRouter) [![License:MIT](https://img.shields.io/badge/License-MIT-black.svg)](https://opensource.org/license/mit) [![solidity](https://img.shields.io/badge/solidity-%5E0.8.30-black)](https://docs.soliditylang.org/en/v0.8.30/) [![Foundry](https://img.shields.io/badge/Built%20with-Foundry-000000.svg)](https://getfoundry.sh/)
 
-An actually simple and gas-efficient Uniswap router with `zAMM`(https://zamm.finance/).
+An actually simple and gas-efficient Uniswap router with [`zAMM`](https://zamm.finance/).
 
 Each version has dedicated entrypoint function with similar args:
 
@@ -17,11 +17,21 @@ Features:
 - bridges all liquid ERC20s with ERC6909 finance on zAMM
 - includes WETH abstraction for all ETH input and output
 
-Deployed to [0x0000000000333d29b8a64dd020594fb230d5c7a3](https://contractscan.xyz/contract/0x0000000000333d29b8a64dd020594fb230d5c7a3).
+Deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835) on Ethereum and Base.
+
+Router helper (`zQuoter`) deployed to [0x5A22e20cCD555c6402809476b3F57Fb4c2AC0aE2](https://etherscan.io/address/0x5A22e20cCD555c6402809476b3F57Fb4c2AC0aE2#code).
+
+And [0x772E2810A471dB2CC7ADA0d37D6395476535889a](https://basescan.org/address/0x772E2810A471dB2CC7ADA0d37D6395476535889a#code) on Base.
 
 Great for bots, on-the-fly strategies, and aggregation.
 
 Bonus: Includes V2-style SushiSwap pools in `swapV2()`.
+
+## Base deployment
+
+Supports Aerodrome methods, `swapAero()`, `swapAeroCL()`. No SushiSwap. Otherwise ABI and Uniswap methods remain the same.
+
+Onchain dapp deployment: [base.zamm.eth](https://base.zamm.eth.limo)
 
 ## Security note
 

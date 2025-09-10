@@ -1,5 +1,5 @@
 # Constants
-[Git Source](https://github.com/zammdefi/zRouter/blob/15c5fb7442065a88b0c255094f10ebd47b711ccb/src/zRouter.sol)
+[Git Source](https://github.com/zammdefi/zRouter/blob/69617a4a7c4ee7b21900c469f2a65ec825391317/src/zRouter.sol)
 
 ### V2_FACTORY
 
@@ -50,6 +50,12 @@ uint160 constant MIN_SQRT_RATIO_PLUS_ONE = 4295128740;
 
 ```solidity
 uint160 constant MAX_SQRT_RATIO_MINUS_ONE = 1461446703485210103287273052203988822378723970341;
+```
+
+### V4_ROUTER
+
+```solidity
+address constant V4_ROUTER = 0x00000000000044a361Ae3cAc094c9D1b14Eece97;
 ```
 
 ### V4_POOL_MANAGER

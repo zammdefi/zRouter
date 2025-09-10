@@ -1,5 +1,5 @@
 # zRouter
-[Git Source](https://github.com/zammdefi/zRouter/blob/15c5fb7442065a88b0c255094f10ebd47b711ccb/src/zRouter.sol)
+[Git Source](https://github.com/zammdefi/zRouter/blob/69617a4a7c4ee7b21900c469f2a65ec825391317/src/zRouter.sol)
 
 *uniV2 / uniV3 / uniV4 / zAMM
 multi-amm multi-call router
@@ -76,6 +76,19 @@ function swapV4(
     uint256 amountLimit,
     uint256 deadline
 ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut);
+```
+
+### swapV4Router
+
+
+```solidity
+function swapV4Router(
+    bytes calldata data,
+    uint256 deadline,
+    uint256 ethIn,
+    address tokenOut,
+    uint256 amountOut
+) public payable returns (int256 delta);
 ```
 
 ### unlockCallback

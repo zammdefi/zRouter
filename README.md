@@ -19,7 +19,7 @@ Features:
 
 Deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835) on Ethereum and Base.
 
-Router helper (`zQuoter`) deployed to [0x658bF1A6608210FDE7310760f391AD4eC8006A5F](https://etherscan.io/address/0x658bf1a6608210fde7310760f391ad4ec8006a5f#code).
+Router helper (`zQuoter`) deployed to [0x5A22e20cCD555c6402809476b3F57Fb4c2AC0aE2](https://etherscan.io/address/0x5A22e20cCD555c6402809476b3F57Fb4c2AC0aE2#code).
 
 And [0x772E2810A471dB2CC7ADA0d37D6395476535889a](https://basescan.org/address/0x772E2810A471dB2CC7ADA0d37D6395476535889a#code) on Base.
 
