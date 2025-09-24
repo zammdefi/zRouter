@@ -4,6 +4,9 @@ pragma solidity ^0.8.30;
 /// @dev uniV2 / uniV3 / uniV4 / zAMM
 ///      multi-amm multi-call router
 ///      optimized with simple abi.
+///      Includes trusted routers,
+///      and a Curve AMM swapper,
+///      as well as Lido staker.
 contract zRouter {
     error BadSwap();
     error Expired();
@@ -20,8 +23,12 @@ contract zRouter {
         _;
     }
 
+    event OwnershipTransferred(address indexed from, address indexed to);
+
     constructor() payable {
         safeApprove(CULT, CULT_HOOK, type(uint256).max); // milady
+        safeApprove(STETH, WSTETH, type(uint256).max); // lido
+        emit OwnershipTransferred(address(0), _owner = tx.origin);
     }
 
     function swapV2(
@@ -143,6 +150,9 @@ contract zRouter {
 
     /// @dev `uniswapV3SwapCallback`.
     fallback() external payable {
+        assembly ("memory-safe") {
+            if gt(tload(0x00), 0) { revert(0, 0) }
+        }
         unchecked {
             int256 amount0Delta;
             int256 amount1Delta;
@@ -214,19 +224,6 @@ contract zRouter {
         depositFor(tokenOut, 0, amountOut, to); // marks output target
     }
 
-    // ** V4 ROUTER HELPER - HELPS WITH HOOKS AND MULTIHOPS:
-
-    function swapV4Router(
-        bytes calldata data,
-        uint256 deadline,
-        uint256 ethIn,
-        address tokenOut,
-        uint256 amountOut
-    ) public payable returns (int256 delta) {
-        delta = IV4Router(V4_ROUTER).swap{value: ethIn}(data, deadline);
-        if (amountOut != 0) depositFor(tokenOut, 0, amountOut, address(this));
-    }
-
     /// @dev Handle V4 PoolManager swap callback - hookless default.
     function unlockCallback(bytes calldata callbackData)
         public
@@ -234,6 +231,10 @@ contract zRouter {
         returns (bytes memory result)
     {
         require(msg.sender == V4_POOL_MANAGER, Unauthorized());
+
+        assembly ("memory-safe") {
+            if gt(tload(0x00), 0) { revert(0, 0) }
+        }
 
         (
             address payer,
@@ -402,7 +403,276 @@ contract zRouter {
         }
     }
 
-    /// @dev To be called following deposit() or other swaps in sequence.
+    function swapCurve(
+        address to,
+        bool exactOut,
+        address[11] calldata route,
+        uint256[4][5] calldata swapParams, // [i, j, swap_type, pool_type]
+        address[5] calldata basePools, // for meta pools (only used by type=2 get_dx)
+        uint256 swapAmount,
+        uint256 amountLimit,
+        uint256 deadline
+    ) public payable checkDeadline(deadline) returns (uint256 amountIn, uint256 amountOut) {
+        // ---- resolve last hop & output token ----
+        address inputToken = route[0];
+        address outputToken;
+        uint256 lastIdx;
+        unchecked {
+            for (uint256 i; i < 5; ++i) {
+                address pool = route[i * 2 + 1];
+                if (pool == address(0)) break;
+                outputToken = route[(i + 1) * 2];
+                lastIdx = i;
+            }
+        }
+        bool ethIn = _isETH(inputToken);
+
+        // ---- compute working amount ----
+        uint256 amount = swapAmount;
+        if (exactOut) {
+            // backward pass: Curve-style get_dx to find required input:
+            unchecked {
+                for (uint256 k = lastIdx + 1; k != 0;) {
+                    uint256 i = --k;
+                    address pool = route[i * 2 + 1];
+                    uint256[4] memory p = swapParams[i]; // [i, j, swap_type, pool_type]
+                    uint256 st = p[2];
+                    uint256 pt = p[3];
+
+                    if (st == 8) {
+                        // ETH<->WETH is 1:1
+                    } else if (st == 1) {
+                        if (pt == 10) {
+                            int128 pi = int128(int256(p[0]));
+                            int128 pj = int128(int256(p[1]));
+                            amount = IStableNgPool(pool).get_dx(pi, pj, amount);
+                        } else {
+                            amount = ICryptoNgPool(pool).get_dx(p[0], p[1], amount);
+                        }
+                    } else if (st == 2) {
+                        int128 pi = int128(int256(p[0]));
+                        int128 pj = int128(int256(p[1]));
+                        if (pi > 0 && pj > 0) {
+                            amount = IStableNgPool(basePools[i]).get_dx(pi - 1, pj - 1, amount);
+                        } else {
+                            amount = IStableNgMetaPool(pool).get_dx_underlying(pi, pj, amount);
+                        }
+                    } else if (st == 4) {
+                        // inverse of add_liquidity (approx):
+                        amount = (pt == 10)
+                            ? IStableNgPool(pool).calc_withdraw_one_coin(amount, int128(int256(p[0])))
+                            : ICryptoNgPool(pool).calc_withdraw_one_coin(amount, p[0]);
+                    } else if (st == 6) {
+                        if (pt == 10) {
+                            uint256[8] memory a;
+                            a[p[1]] = amount;
+                            amount = IStableNgPool(pool).calc_token_amount(a, false);
+                        } else if (pt == 20) {
+                            uint256[2] memory a2;
+                            a2[p[1]] = amount;
+                            amount = ITwoCryptoNgPool(pool).calc_token_amount(a2, false);
+                        } else if (pt == 30) {
+                            uint256[3] memory a3;
+                            a3[p[1]] = amount;
+                            amount = ITriCryptoNgPool(pool).calc_token_amount(a3, false);
+                        } else {
+                            revert BadSwap();
+                        }
+                    } else {
+                        revert BadSwap();
+                    }
+                }
+            }
+            amountIn = amount;
+            if (amountLimit != 0 && amountIn > amountLimit) revert Slippage();
+        } else {
+            // exact-in flow:
+            if (swapAmount == 0) {
+                amountIn = ethIn ? msg.value : balanceOf(inputToken);
+                if (amountIn == 0) revert BadSwap();
+            } else {
+                amountIn = swapAmount;
+                if (ethIn && msg.value != amountIn) revert InvalidMsgVal();
+            }
+        }
+
+        // ---- pre-fund router (Curve pools pull via transferFrom(router)) ----
+        address firstToken = ethIn ? WETH : inputToken;
+
+        {
+            uint256 need = amountIn;
+            if (!_useTransientBalance(address(this), firstToken, 0, need)) {
+                if (ethIn) {
+                    if (msg.value < need) revert InvalidMsgVal();
+                    wrap(need); // wrap exactly what we need as WETH
+                } else {
+                    safeTransferFrom(firstToken, msg.sender, address(this), need);
+                }
+            }
+        }
+
+        // ---- execute the route (forward pass) ----
+        address curIn = inputToken;
+        amount = amountIn; // start with dx
+
+        unchecked {
+            for (uint256 i; i <= lastIdx; ++i) {
+                address pool = route[i * 2 + 1];
+                address nextToken = route[(i + 1) * 2];
+                uint256[4] memory p = swapParams[i]; // [i, j, swap_type, pool_type]
+                uint256 st = p[2];
+                uint256 pt = p[3];
+
+                if (st == 8) {
+                    if (_isETH(curIn) && nextToken == WETH) {
+                        // if first hop, we already wrapped in pre-fund; otherwise wrap what we just got:
+                        if (i != 0) {
+                            if (address(this).balance < amount) revert BadSwap();
+                            wrap(amount);
+                        }
+                        curIn = WETH;
+                    } else if (curIn == WETH && _isETH(nextToken)) {
+                        unwrapETH(amount);
+                        curIn = address(0); // normalize to 0x00 internally
+                    } else {
+                        revert BadSwap();
+                    }
+                    continue;
+                }
+
+                // ---- lazy approve current input token for this pool (ERC20 only) ----
+                address inToken = _isETH(curIn) ? WETH : curIn;
+                if (!_curveApproved[inToken][pool]) {
+                    uint256 allowance_ = IERC20Allowance(inToken).allowance(address(this), pool);
+                    if (allowance_ == 0) {
+                        // forceApprove pattern if your safeApprove handles non-standard tokens
+                        safeApprove(inToken, pool, type(uint256).max);
+                    }
+                    _curveApproved[inToken][pool] = true;
+                }
+
+                // track output balance before hop
+                uint256 outBalBefore =
+                    _isETH(nextToken) ? address(this).balance : balanceOf(nextToken);
+
+                // perform hop:
+                if (st == 1) {
+                    if (pt == 10) {
+                        IStableNgPool(pool).exchange(
+                            int128(int256(p[0])), int128(int256(p[1])), amount, 0
+                        );
+                    } else {
+                        ICryptoNgPool(pool).exchange(p[0], p[1], amount, 0);
+                    }
+                } else if (st == 2) {
+                    IStableNgMetaPool(pool).exchange_underlying(
+                        int128(int256(p[0])), int128(int256(p[1])), amount, 0
+                    );
+                } else if (st == 4) {
+                    if (pt == 10) {
+                        uint256[8] memory a;
+                        a[p[0]] = amount;
+                        IStableNgPool(pool).add_liquidity(a, 0);
+                    } else if (pt == 20) {
+                        uint256[2] memory a2;
+                        a2[p[0]] = amount;
+                        ITwoCryptoNgPool(pool).add_liquidity(a2, 0);
+                    } else if (pt == 30) {
+                        uint256[3] memory a3;
+                        a3[p[0]] = amount;
+                        ITriCryptoNgPool(pool).add_liquidity(a3, 0);
+                    } else {
+                        revert BadSwap();
+                    }
+                } else if (st == 6) {
+                    if (pt == 10) {
+                        IStableNgPool(pool).remove_liquidity_one_coin(
+                            amount, int128(int256(p[1])), 0
+                        );
+                    } else {
+                        ICryptoNgPool(pool).remove_liquidity_one_coin(amount, p[1], 0);
+                    }
+                } else {
+                    revert BadSwap();
+                }
+
+                // compute output of hop:
+                uint256 outBalAfter =
+                    _isETH(nextToken) ? address(this).balance : balanceOf(nextToken);
+                if (outBalAfter <= outBalBefore) revert BadSwap();
+                amount = outBalAfter - outBalBefore; // next hop input
+                curIn = nextToken;
+            }
+        }
+
+        // ---- finalize & slippage ----
+        if (!exactOut) {
+            amountOut = amount;
+            if (amountLimit != 0 && amountOut < amountLimit) revert Slippage();
+        } else {
+            // actual produced amount is `amount`; must be >= desired swapAmount:
+            if (amount < swapAmount) revert Slippage();
+            amountOut = swapAmount; // user-facing target
+        }
+
+        // ---- deliver final output to `to` and refund surplus output (exactOut) ----
+        if (!exactOut) {
+            // deliver full amount for exact-in:
+            if (_isETH(outputToken)) {
+                _safeTransferETH(to, amount);
+            } else if (to == address(this)) {
+                depositFor(outputToken, 0, amount, to); // chaining
+            } else {
+                safeTransfer(outputToken, to, amount);
+            }
+        } else {
+            // send only swapAmount to `to`; refund surplus to msg.sender:
+            uint256 surplus = amount - swapAmount;
+            if (_isETH(outputToken)) {
+                // pay receiver
+                _safeTransferETH(to, swapAmount);
+                // refund any extra output
+                if (surplus != 0) _safeTransferETH(msg.sender, surplus);
+            } else {
+                if (to == address(this)) {
+                    // chaining: only mark the requested target amount
+                    depositFor(outputToken, 0, swapAmount, to);
+                } else {
+                    safeTransfer(outputToken, to, swapAmount);
+                }
+                if (surplus != 0) safeTransfer(outputToken, msg.sender, surplus);
+            }
+        }
+
+        // ---- leftover input refund (exactOut only, not chaining) ----
+        if (exactOut && to != address(this)) {
+            if (ethIn) {
+                // refund any ETH dust first:
+                uint256 e = address(this).balance;
+                if (e != 0) _safeTransferETH(msg.sender, e);
+
+                // refund any *WETH* dust created by positive slippage:
+                uint256 w = balanceOf(WETH);
+                if (w != 0) {
+                    unwrapETH(w);
+                    _safeTransferETH(msg.sender, w);
+                }
+            } else {
+                // non-ETH inputs already use `firstToken`:
+                uint256 refund = balanceOf(firstToken);
+                if (refund != 0) safeTransfer(firstToken, msg.sender, refund);
+            }
+        }
+    }
+
+    // token => pool => approved? - lazy approvals for curve sequencing
+    mapping(address token => mapping(address pool => bool)) _curveApproved;
+
+    function _isETH(address a) internal pure returns (bool) {
+        return a == address(0) || a == CURVE_ETH;
+    }
+
+    /// @dev To be called for zAMM following deposit() or other swaps in sequence.
     function addLiquidity(
         PoolKey calldata poolKey,
         uint256 amount0Desired,
@@ -418,16 +688,10 @@ contract zRouter {
         );
     }
 
-    /// @dev Allows remote pulls by zAMM for swapZAMM() calls.
-    function ensureAllowance(address token, bool is6909, bool isRetro) public payable {
-        if (is6909) {
-            IERC6909(token).setOperator(ZAMM, true);
-            if (isRetro) IERC6909(token).setOperator(ZAMM_0, true);
-        } else {
-            safeApprove(token, ZAMM, type(uint256).max);
-            safeApprove(token, V4_ROUTER, type(uint256).max);
-            if (isRetro) safeApprove(token, ZAMM_0, type(uint256).max);
-        }
+    /// @dev Allows remote pulls by zAMM for swapZAMM() calls, as well as other supported pullers.
+    function ensureAllowance(address token, bool is6909, address to) public payable {
+        if (is6909) IERC6909(token).setOperator(to, true);
+        else safeApprove(token, to, type(uint256).max);
     }
 
     // ** MULITSWAP HELPER
@@ -615,7 +879,141 @@ contract zRouter {
     {
         (token0, token1) = (zeroForOne = tokenA < tokenB) ? (tokenA, tokenB) : (tokenB, tokenA);
     }
+
+    // EXECUTE EXTENSIONS
+
+    address _owner;
+
+    modifier onlyOwner() {
+        require(msg.sender == _owner, Unauthorized());
+        _;
+    }
+
+    mapping(address target => bool) _isTrustedForCall;
+
+    function trust(address target, bool ok) public payable onlyOwner {
+        _isTrustedForCall[target] = ok;
+    }
+
+    function transferOwnership(address owner) public payable onlyOwner {
+        emit OwnershipTransferred(msg.sender, _owner = owner);
+    }
+
+    function execute(address target, uint256 value, bytes calldata data)
+        public
+        payable
+        returns (bytes memory result)
+    {
+        require(_isTrustedForCall[target], Unauthorized());
+        assembly ("memory-safe") {
+            tstore(0x00, 1) // lock callback (V3/V4)
+            result := mload(0x40)
+            calldatacopy(result, data.offset, data.length)
+            if iszero(call(gas(), target, value, result, data.length, codesize(), 0x00)) {
+                returndatacopy(result, 0x00, returndatasize())
+                revert(result, returndatasize())
+            }
+            mstore(result, returndatasize())
+            let o := add(result, 0x20)
+            returndatacopy(o, 0x00, returndatasize())
+            mstore(0x40, add(o, returndatasize()))
+            tstore(0x00, 0) // unlock callback
+        }
+    }
+
+    // LIDO STAKING ****
+
+    // **** EXACT ETH IN - MAX TOKEN OUT
+    // note: If user doesn't care about `to` then just send ETH to STETH or WSTETH
+
+    function exactETHToSTETH(address to) public payable returns (uint256 shares) {
+        assembly ("memory-safe") {
+            mstore(0x00, 0xa1903eab000000000000000000000000)
+            pop(call(gas(), STETH, callvalue(), 0x10, 0x24, 0x00, 0x20))
+            shares := mload(0x00)
+            mstore(0x00, 0x8fcb4e5b000000000000000000000000)
+            mstore(0x14, to)
+            mstore(0x34, shares)
+            pop(call(gas(), STETH, 0, 0x10, 0x44, codesize(), 0x00))
+            mstore(0x34, 0)
+        }
+    }
+
+    function exactETHToWSTETH(address to) public payable returns (uint256 wstOut) {
+        assembly ("memory-safe") {
+            pop(call(gas(), WSTETH, callvalue(), codesize(), 0x00, codesize(), 0x00))
+            mstore(0x14, address())
+            mstore(0x00, 0x70a08231000000000000000000000000)
+            pop(staticcall(gas(), WSTETH, 0x10, 0x24, 0x00, 0x20))
+            wstOut := mload(0x00)
+            mstore(0x00, 0xa9059cbb000000000000000000000000)
+            mstore(0x14, to)
+            mstore(0x34, wstOut)
+            pop(call(gas(), WSTETH, 0, 0x10, 0x44, codesize(), 0x00))
+            mstore(0x34, 0)
+        }
+    }
+
+    // **** EXACT TOKEN OUT - REFUND EXCESS ETH IN
+
+    function ethToExactSTETH(address to, uint256 exactOut) public payable {
+        assembly ("memory-safe") {
+            mstore(0x00, 0xd5002f2e000000000000000000000000)
+            pop(staticcall(gas(), STETH, 0x10, 0x04, 0x00, 0x20))
+            let S := mload(0x00)
+            mstore(0x00, 0x37cfdaca000000000000000000000000)
+            pop(staticcall(gas(), STETH, 0x10, 0x04, 0x00, 0x20))
+            let T := mload(0x00)
+            let z := mul(exactOut, S)
+            let sharesNeeded := add(iszero(iszero(mod(z, T))), div(z, T))
+            z := mul(sharesNeeded, T)
+            let ethIn := add(iszero(iszero(mod(z, S))), div(z, S))
+            if gt(ethIn, callvalue()) { revert(0x00, 0x00) }
+            pop(call(gas(), STETH, ethIn, codesize(), 0x00, codesize(), 0x00))
+            mstore(0x00, 0x8fcb4e5b000000000000000000000000)
+            mstore(0x14, to)
+            mstore(0x34, sharesNeeded)
+            pop(call(gas(), STETH, 0, 0x10, 0x44, codesize(), 0x00))
+            if gt(callvalue(), ethIn) {
+                pop(
+                    call(
+                        gas(), caller(), sub(callvalue(), ethIn), codesize(), 0x00, codesize(), 0x00
+                    )
+                )
+            }
+        }
+    }
+
+    function ethToExactWSTETH(address to, uint256 exactOut) public payable {
+        assembly ("memory-safe") {
+            mstore(0x00, 0xd5002f2e000000000000000000000000)
+            pop(staticcall(gas(), STETH, 0x10, 0x04, 0x00, 0x20))
+            let S := mload(0x00)
+            mstore(0x00, 0x37cfdaca000000000000000000000000)
+            pop(staticcall(gas(), STETH, 0x10, 0x04, 0x00, 0x20))
+            let ethIn := mul(exactOut, mload(0x00))
+            ethIn := add(iszero(iszero(mod(ethIn, S))), div(ethIn, S))
+            if gt(ethIn, callvalue()) { revert(0x00, 0x00) }
+            pop(call(gas(), WSTETH, ethIn, codesize(), 0x00, codesize(), 0x00))
+            mstore(0x00, 0xa9059cbb000000000000000000000000)
+            mstore(0x14, to)
+            mstore(0x34, exactOut)
+            pop(call(gas(), WSTETH, 0, 0x10, 0x44, codesize(), 0x00))
+            if gt(callvalue(), ethIn) {
+                pop(
+                    call(
+                        gas(), caller(), sub(callvalue(), ethIn), codesize(), 0x00, codesize(), 0x00
+                    )
+                )
+            }
+        }
+    }
 }
+
+// Lido helpers:
+
+address constant STETH = 0xae7ab96520DE3A18E5e111B5EaAb095312D7fE84;
+address constant WSTETH = 0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0;
 
 // Uniswap helpers:
 
@@ -651,12 +1049,7 @@ interface IV3Pool {
     ) external returns (int256 amount0, int256 amount1);
 }
 
-address constant V4_ROUTER = 0x00000000000044a361Ae3cAc094c9D1b14Eece97;
 address constant V4_POOL_MANAGER = 0x000000000004444c5dc75cB358380D2e3dE08A90;
-
-interface IV4Router {
-    function swap(bytes calldata data, uint256 deadline) external payable returns (int256);
-}
 
 struct V4PoolKey {
     address currency0;
@@ -743,6 +1136,72 @@ interface IZAMM {
         address to,
         uint256 deadline
     ) external payable returns (uint256 amount0, uint256 amount1, uint256 liquidity);
+}
+
+// Curve helpers:
+
+address constant CURVE_ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+
+interface IERC20Allowance {
+    function allowance(address, address) external view returns (uint256);
+}
+
+interface IStableNgPool {
+    function get_dy(int128 i, int128 j, uint256 in_amount) external view returns (uint256);
+    function get_dx(int128 i, int128 j, uint256 out_amount) external view returns (uint256);
+    function exchange(int128 i, int128 j, uint256 dx, uint256 min_dy) external;
+    function calc_token_amount(uint256[8] calldata _amounts, bool _is_deposit)
+        external
+        view
+        returns (uint256);
+    function add_liquidity(uint256[8] calldata _amounts, uint256 _min_mint_amount)
+        external
+        returns (uint256);
+    function calc_withdraw_one_coin(uint256 token_amount, int128 i)
+        external
+        view
+        returns (uint256);
+    function remove_liquidity_one_coin(uint256 token_amount, int128 i, uint256 min_amount)
+        external;
+}
+
+interface IStableNgMetaPool {
+    function get_dx_underlying(int128 i, int128 j, uint256 amount)
+        external
+        view
+        returns (uint256);
+    function exchange_underlying(int128 i, int128 j, uint256 dx, uint256 min_dy) external;
+}
+
+interface ICryptoNgPool {
+    function get_dx(uint256 i, uint256 j, uint256 out_amount) external view returns (uint256);
+    function exchange(uint256 i, uint256 j, uint256 dx, uint256 min_dy) external;
+    function calc_withdraw_one_coin(uint256 token_amount, uint256 i)
+        external
+        view
+        returns (uint256);
+    function remove_liquidity_one_coin(uint256 token_amount, uint256 i, uint256 min_amount)
+        external;
+}
+
+interface ITwoCryptoNgPool {
+    function calc_token_amount(uint256[2] calldata amounts, bool is_deposit)
+        external
+        view
+        returns (uint256);
+    function add_liquidity(uint256[2] calldata amounts, uint256 min_mint_amount)
+        external
+        returns (uint256);
+}
+
+interface ITriCryptoNgPool {
+    function calc_token_amount(uint256[3] calldata amounts, bool is_deposit)
+        external
+        view
+        returns (uint256);
+    function add_liquidity(uint256[3] calldata amounts, uint256 min_mint_amount)
+        external
+        returns (uint256);
 }
 
 // Solady safe transfer helpers:

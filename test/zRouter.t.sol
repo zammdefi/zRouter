@@ -14,8 +14,16 @@ interface IUniV2PairReserves {
 interface IERC20 {
     function balanceOf(address user) external view returns (uint256);
     function approve(address, uint256) external returns (bool);
+    function transfer(address, uint256) external returns (bool);
     function transferFrom(address, address, uint256) external returns (bool);
 }
+
+interface IFWETH {
+    function depositNative(address) external payable;
+    function deposit(uint256, address) external;
+}
+
+address constant FWETH = 0x90551c1795392094FE6D29B758EcCD233cFAa260;
 
 contract zRouterTest is Test {
     uint256 DEADLINE;
@@ -37,6 +45,14 @@ contract zRouterTest is Test {
     uint256 constant USDC_IN = 100e6; // 100 USDC exact-in for USDC→ETH test
     uint256 constant ETH_IN = 0.05 ether; // 0.05 ETH budget for exact-out test
     uint256 constant USDC_OUT = 50e6; // 50 USDC exact-out target
+
+    address constant BAL_POOL_WETH_TOKEN = 0xDeaDbeefdEAdbeefdEadbEEFdeadbeEFdEaDbeeF; // ← fill: Balancer V3 pool
+    address constant TOKEN = 0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48; // e.g., USDC
+    uint8 constant TOKEN_DECIMALS = 6; // 6 for USDC
+
+    function _scaleToken(uint256 units) internal pure returns (uint256) {
+        return units * (10 ** TOKEN_DECIMALS);
+    }
 
     /* ───────────── state ───────────── */
     zRouter router;
@@ -347,10 +363,12 @@ contract zRouterTest is Test {
         assertGt(IERC20(USDC).balanceOf(VITALIK) - usdcBefore, 0, "no USDC out");
     }
 
+    address ZAMM_1 = 0x000000000000040470635EB91b7CE4D132D616eD;
+
     function testExactIn_USDCtoETH_ZAMM() public {
         uint256 ethBefore = VITALIK.balance;
 
-        router.ensureAllowance(USDC, false, false);
+        router.ensureAllowance(USDC, false, ZAMM_1);
 
         vm.prank(VITALIK);
         router.swapVZ(VITALIK, false, 30, USDC, address(0), 0, 0, USDC_IN, 0, DEADLINE);
@@ -361,7 +379,7 @@ contract zRouterTest is Test {
     function testExactOut_USDCtoETH_ZAMM() public {
         uint256 ethBefore = VITALIK.balance;
 
-        router.ensureAllowance(USDC, false, false);
+        router.ensureAllowance(USDC, false, ZAMM_1);
 
         vm.prank(VITALIK);
         router.swapVZ(VITALIK, true, 30, USDC, address(0), 0, 0, ETH_IN / 2, USDC_IN, DEADLINE);
@@ -606,7 +624,7 @@ contract zRouterTest is Test {
             DEADLINE
         );
 
-        router.ensureAllowance(USDC, false, false);
+        router.ensureAllowance(USDC, false, ZAMM);
 
         uint256 ethBefore = VITALIK.balance;
 
@@ -921,6 +939,332 @@ contract zRouterTest is Test {
         router.swapVZ(VITALIK, false, CULT_ID, CULT, address(0), 0, 0, amountOut, 0, DEADLINE);
     }
 
+    // CURVE
+
+    function testCurve_ETHtoWEETH_ExactIn() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+        uint256 ethIn = 0.02 ether;
+
+        address[11] memory route;
+        route[0] = address(0); // ETH
+        route[1] = WETH; // nonzero sentinel for type 8
+        route[2] = WETH; // after wrap
+        route[3] = WEETH_WETH_NG_POOL; // pool
+        route[4] = WEETH; // final token
+
+        uint256[4][5] memory sp;
+        sp[0] = [uint256(0), uint256(0), uint256(8), uint256(0)]; // ETH<->WETH
+        sp[1] = [iWeth, jWeeth, uint256(1), uint256(10)]; // exchange, stable-ng
+
+        address[5] memory basePools; // zeros
+
+        uint256 weethBefore = IERC20(WEETH).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        (uint256 amountIn, uint256 amountOut) = router.swapCurve{value: ethIn}(
+            VITALIK,
+            false, // exact-in
+            route,
+            sp,
+            basePools,
+            ethIn,
+            0, // minOut
+            DEADLINE
+        );
+
+        assertEq(amountIn, ethIn, "exact-in should spend full ETH");
+        assertGt(IERC20(WEETH).balanceOf(VITALIK) - weethBefore, 0, "no weETH out");
+    }
+
+    function testCurve_WETHtoWEETH_ExactIn() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+
+        // fund Vitalik with WETH
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(VITALIK, 0.05 ether);
+        vm.stopPrank();
+
+        // approvals: user → router, and router → pool
+        vm.startPrank(VITALIK);
+        IERC20(WETH).approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        uint256 inAmt = 0.02 ether;
+
+        // route without ETH hop
+        address[11] memory route;
+        route[0] = WETH;
+        route[1] = WEETH_WETH_NG_POOL;
+        route[2] = WEETH;
+
+        uint256[4][5] memory sp;
+        sp[0] = [iWeth, jWeeth, uint256(1), uint256(10)]; // exchange, stable-ng
+
+        address[5] memory basePools;
+
+        uint256 weethBefore = IERC20(WEETH).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        (uint256 amountIn, uint256 amountOut) =
+            router.swapCurve(VITALIK, false, route, sp, basePools, inAmt, 0, DEADLINE);
+
+        uint256 weethDelta = IERC20(WEETH).balanceOf(VITALIK) - weethBefore;
+        assertEq(amountIn, inAmt, "wrong input spent");
+        assertGt(amountOut, 0, "no output");
+        assertEq(weethDelta, amountOut, "credit mismatch");
+    }
+
+    function testCurve_WETHtoWEETH_ExactOut() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+
+        // fund Vitalik with WETH
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(VITALIK, 0.2 ether);
+        vm.stopPrank();
+
+        // approvals: user → router, and router → pool
+        vm.startPrank(VITALIK);
+        IERC20(WETH).approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        uint256 targetOut = 0.003e18;
+
+        // build route WETH -> weETH
+        address[11] memory route;
+        route[0] = WETH;
+        route[1] = WEETH_WETH_NG_POOL;
+        route[2] = WEETH;
+
+        uint256[4][5] memory sp;
+        sp[0] = [iWeth, jWeeth, uint256(1), uint256(10)]; // exchange, stable-ng
+
+        address[5] memory basePools;
+
+        // quote rough required WETH using view get_dx
+        uint256 dx = IStableNgPool(WEETH_WETH_NG_POOL).get_dx(
+            int128(int256(iWeth)), int128(int256(jWeeth)), targetOut
+        );
+        uint256 budget = dx + 1e14; // add small headroom
+
+        uint256 wethBefore = IERC20(WETH).balanceOf(VITALIK);
+        uint256 weethBefore = IERC20(WEETH).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        (uint256 amountIn, uint256 amountOut) =
+            router.swapCurve(VITALIK, true, route, sp, basePools, targetOut, budget, DEADLINE);
+
+        uint256 wethSpent = wethBefore - IERC20(WETH).balanceOf(VITALIK);
+        uint256 weethDelta = IERC20(WEETH).balanceOf(VITALIK) - weethBefore;
+
+        assertEq(amountOut, targetOut, "reported amountOut should equal target");
+        assertGe(weethDelta, targetOut, "under-delivered");
+        assertLe(weethDelta - targetOut, 1e9, "overfill too large"); // small rounding wiggle
+        assertLe(amountIn, budget, "overspent");
+        assertLe(wethSpent, budget, "overspent wallet");
+    }
+
+    function testCurve_RoundTrip_WETH_WEETH_DepositForThenSweep() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+
+        // fund Vitalik with WETH
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(VITALIK, 0.06 ether);
+        vm.stopPrank();
+
+        // approvals: user → router; router → pool; router → pool for WETH (already), and for weETH for the reverse leg
+        vm.startPrank(VITALIK);
+        IERC20(WETH).approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        // leg 1: WETH -> weETH (to router for chaining)
+        address[11] memory r1;
+        r1[0] = WETH;
+        r1[1] = WEETH_WETH_NG_POOL;
+        r1[2] = WEETH;
+        uint256[4][5] memory p1;
+        p1[0] = [iWeth, jWeeth, uint256(1), uint256(10)];
+        address[5] memory bp;
+
+        vm.prank(VITALIK);
+        router.swapCurve(
+            address(router), // keep on router for next hop
+            false,
+            r1,
+            p1,
+            bp,
+            0.03 ether,
+            0,
+            DEADLINE
+        );
+
+        // leg 2: weETH -> WETH (consume transient balance, deliver back to Vitalik)
+        address[11] memory r2;
+        r2[0] = WEETH;
+        r2[1] = WEETH_WETH_NG_POOL;
+        r2[2] = WETH;
+        uint256[4][5] memory p2;
+        p2[0] = [jWeeth, iWeth, uint256(1), uint256(10)];
+
+        uint256 wethBefore = IERC20(WETH).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.swapCurve(
+            VITALIK,
+            false,
+            r2,
+            p2,
+            bp,
+            0, // exact-in amount will be pulled from router transient balance (all available)
+            0,
+            DEADLINE
+        );
+
+        uint256 wethAfter = IERC20(WETH).balanceOf(VITALIK);
+        assertGt(wethAfter - wethBefore, 0, "no WETH back");
+    }
+
+    function testCurve_WEETHtoETH_ExactIn_Unwrap() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+
+        // get some weETH first by doing WETH -> weETH exact-in
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(VITALIK, 0.03 ether);
+        vm.stopPrank();
+        vm.startPrank(VITALIK);
+        IERC20(WETH).approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        // WETH -> weETH to user
+        {
+            address[11] memory r;
+            r[0] = WETH;
+            r[1] = WEETH_WETH_NG_POOL;
+            r[2] = WEETH;
+            uint256[4][5] memory spR;
+            spR[0] = [iWeth, jWeeth, uint256(1), uint256(10)];
+            address[5] memory bp;
+            vm.prank(VITALIK);
+            router.swapCurve(VITALIK, false, r, spR, bp, 0.02 ether, 0, DEADLINE);
+        }
+
+        // Now weETH -> WETH -> ETH (type-8 last hop) to Vitalik
+        address[11] memory route;
+        route[0] = WEETH;
+        route[1] = WEETH_WETH_NG_POOL;
+        route[2] = WETH;
+        route[3] = WETH; // sentinel for type-8 step
+        route[4] = address(0); // final ETH
+
+        uint256[4][5] memory sp;
+        sp[0] = [jWeeth, iWeth, uint256(1), uint256(10)]; // exchange
+        sp[1] = [uint256(0), uint256(0), uint256(8), uint256(0)]; // WETH -> ETH
+
+        address[5] memory basePools;
+
+        uint256 ethBefore = VITALIK.balance;
+
+        // approve weETH from user to router for this leg
+        vm.startPrank(VITALIK);
+        IERC20(WEETH).approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        vm.prank(VITALIK);
+        router.swapCurve(VITALIK, false, route, sp, basePools, 0.001e18, 0, DEADLINE);
+
+        assertGt(VITALIK.balance - ethBefore, 0, "no ETH out");
+    }
+
+    function testCurve_SlippageReverts_ExactIn() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+
+        // fund & approvals
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(VITALIK, 0.02 ether);
+        vm.stopPrank();
+        vm.startPrank(VITALIK);
+        IERC20(WETH).approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        uint256 dx = 0.02 ether;
+
+        // quote realistic out
+        uint256 dy = IStableNgPool(WEETH_WETH_NG_POOL).get_dy(
+            int128(int256(iWeth)), int128(int256(jWeeth)), dx
+        );
+
+        // set impossible minOut (dy + 1)
+        address[11] memory route;
+        route[0] = WETH;
+        route[1] = WEETH_WETH_NG_POOL;
+        route[2] = WEETH;
+        uint256[4][5] memory sp;
+        sp[0] = [iWeth, jWeeth, uint256(1), uint256(10)];
+        address[5] memory basePools;
+
+        vm.prank(VITALIK);
+        vm.expectRevert(zRouter.Slippage.selector);
+        router.swapCurve(VITALIK, false, route, sp, basePools, dx, dy + 1, DEADLINE);
+    }
+
+    function testCurve_SlippageReverts_ExactOut_BudgetTooLow() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+
+        // fund & approvals
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(VITALIK, 0.02 ether);
+        vm.stopPrank();
+        vm.startPrank(VITALIK);
+        IERC20(WETH).approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        uint256 targetOut = 0.002e18;
+        uint256 need = IStableNgPool(WEETH_WETH_NG_POOL).get_dx(
+            int128(int256(iWeth)), int128(int256(jWeeth)), targetOut
+        );
+        uint256 budget = need - 1; // too low
+
+        address[11] memory route;
+        route[0] = WETH;
+        route[1] = WEETH_WETH_NG_POOL;
+        route[2] = WEETH;
+        uint256[4][5] memory sp;
+        sp[0] = [iWeth, jWeeth, uint256(1), uint256(10)];
+        address[5] memory basePools;
+
+        vm.prank(VITALIK);
+        vm.expectRevert(zRouter.Slippage.selector);
+        router.swapCurve(VITALIK, true, route, sp, basePools, targetOut, budget, DEADLINE);
+    }
+
+    function testCurve_ExpiredDeadline_Reverts() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+
+        // fund & approvals
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(VITALIK, 0.02 ether);
+        vm.stopPrank();
+        vm.startPrank(VITALIK);
+        IERC20(WETH).approve(address(router), type(uint256).max);
+        vm.stopPrank();
+
+        address[11] memory route;
+        route[0] = WETH;
+        route[1] = WEETH_WETH_NG_POOL;
+        route[2] = WEETH;
+        uint256[4][5] memory sp;
+        sp[0] = [iWeth, jWeeth, uint256(1), uint256(10)];
+        address[5] memory basePools;
+
+        vm.warp(block.timestamp + 1 hours);
+        vm.prank(VITALIK);
+        vm.expectRevert(zRouter.Expired.selector);
+        router.swapCurve(VITALIK, false, route, sp, basePools, 0.01 ether, 0, DEADLINE);
+    }
+
+    // HELPERS
+
+    receive() external payable {}
+
     function _v2PoolFor(address tokenA, address tokenB) internal pure returns (address v2pool) {
         (address token0, address token1) = _sortTokens(tokenA, tokenB);
         v2pool = address(
@@ -946,4 +1290,110 @@ contract zRouterTest is Test {
     {
         (token0, token1) = tokenA < tokenB ? (tokenA, tokenB) : (tokenB, tokenA);
     }
+
+    // WETH must be index 0 and weETH index 1 on this pool (we assert to be safe).
+    function _wethWeethIndices() internal view returns (uint256 iWeth, uint256 jWeeth) {
+        // WETH is coin(0)
+        (bool ok0, bytes memory d0) =
+            WEETH_WETH_NG_POOL.staticcall(abi.encodeWithSignature("coins(uint256)", 0));
+        address c0 = ok0 && d0.length >= 32 ? abi.decode(d0, (address)) : address(0);
+        require(c0 == WETH, "unexpected coins[0]");
+
+        // coin(1) should be weETH
+        (bool ok1, bytes memory d1) =
+            WEETH_WETH_NG_POOL.staticcall(abi.encodeWithSignature("coins(uint256)", 1));
+        address c1 = ok1 && d1.length >= 32 ? abi.decode(d1, (address)) : address(0);
+        require(c1 == WEETH, "unexpected coins[1]");
+
+        return (0, 1);
+    }
+}
+
+interface IStableNgPoolCoins {
+    function coins(uint256 i) external view returns (address);
+}
+
+address constant WEETH = 0xCd5fE23C85820F7B72D0926FC9b05b43E359b7ee;
+address constant WEETH_WETH_NG_POOL = 0xDB74dfDD3BB46bE8Ce6C33dC9D82777BCFc3dEd5;
+
+// Resolve (i, j) for WETH -> weETH in the pool (pool coin order can vary)
+function _wethWeethIndices() view returns (uint256 iWeth, uint256 jWeeth) {
+    address c0 = IStableNgPoolCoins(WEETH_WETH_NG_POOL).coins(0);
+    if (c0 == WETH) {
+        (iWeth, jWeeth) = (0, 1);
+    } else {
+        // assume only two coins; the other must be WETH
+        (iWeth, jWeeth) = (1, 0);
+    }
+}
+
+interface IBalancerRouterQuery {
+    function querySwapSingleTokenExactOut(
+        address pool,
+        address tokenIn,
+        address tokenOut,
+        uint256 exactAmountOut,
+        address sender,
+        bytes calldata userData
+    ) external returns (uint256 amountCalculated);
+
+    function querySwapSingleTokenExactIn(
+        address pool,
+        IERC20 tokenIn,
+        IERC20 tokenOut,
+        uint256 exactAmountIn,
+        address sender,
+        bytes calldata userData
+    ) external returns (uint256 amountCalculated);
+}
+
+address constant WSTETH_WETH_V3_POOL = 0x6b31a94029fd7840d780191B6D63Fa0D269bd883;
+
+interface IBalancerRouterFull {
+    function querySwapSingleTokenExactIn(
+        address pool,
+        address tokenIn,
+        address tokenOut,
+        uint256 exactAmountIn,
+        address sender,
+        bytes calldata userData
+    ) external returns (uint256 amountCalculated);
+
+    function querySwapSingleTokenExactOut(
+        address pool,
+        address tokenIn,
+        address tokenOut,
+        uint256 exactAmountOut,
+        address sender,
+        bytes calldata userData
+    ) external returns (uint256 amountCalculated);
+}
+
+address constant POOL_WETH_AAVE_V3 = 0x9d1Fcf346eA1b073de4D5834e25572CC6ad71f4d; // WETH/AAVE pool
+address constant AAVE = 0x7Fc66500c84A76Ad7e9c93437bFc5Ac33E2DDaE9;
+
+// minimal hex helpers for readable revert messages
+function _toHex(address a) pure returns (string memory) {
+    bytes20 b = bytes20(a);
+    bytes memory s = new bytes(42);
+    s[0] = "0";
+    s[1] = "x";
+    for (uint256 i; i < 20; ++i) {
+        uint8 v = uint8(b[i]);
+        s[2 + 2 * i] = bytes1((v >> 4) + ((v >> 4) < 10 ? 48 : 87));
+        s[3 + 2 * i] = bytes1((v & 0xf) + ((v & 0xf) < 10 ? 48 : 87));
+    }
+    return string(s);
+}
+
+function _toHexBytes(bytes memory d) pure returns (string memory) {
+    bytes memory s = new bytes(2 + d.length * 2);
+    s[0] = "0";
+    s[1] = "x";
+    for (uint256 i; i < d.length; ++i) {
+        uint8 v = uint8(d[i]);
+        s[2 + 2 * i] = bytes1((v >> 4) + ((v >> 4) < 10 ? 48 : 87));
+        s[3 + 2 * i] = bytes1((v & 0xf) + ((v & 0xf) < 10 ? 48 : 87));
+    }
+    return string(s);
 }
