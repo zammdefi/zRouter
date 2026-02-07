@@ -338,12 +338,13 @@ contract ZRouterBenchTest is Test {
         MockERC20(address(erc20)).approve(PERMIT2, type(uint256).max);
 
         // 2) Give Universal Router an allowance in Permit2 (non-expiring or long-dated)
-        IAllowanceTransfer(PERMIT2).approve(
-            address(erc20),
-            address(UR),
-            type(uint160).max,
-            uint48(block.timestamp + 365 days) // or type(uint48).max - 1
-        );
+        IAllowanceTransfer(PERMIT2)
+            .approve(
+                address(erc20),
+                address(UR),
+                type(uint160).max,
+                uint48(block.timestamp + 365 days) // or type(uint48).max - 1
+            );
 
         vm.stopPrank();
 
@@ -424,13 +425,14 @@ contract ZRouterBenchTest is Test {
         // Calculating sqrt price (P)
         // sqrtPriceX96 = sqrt(P) * 2^96
         uint160 sqrtPriceX96 = address(erc20) < weth
-            ? 79228162514264337593543950336 // If TEST is token0, price = 1/1000
+            ? 79228162514264337593543950336  // If TEST is token0, price = 1/1000
             : 2505414483750479311864138677; // If WETH is token0, price = 1000
 
         vm.prank(ben);
         try positionManager.createAndInitializePoolIfNecessary(token0, token1, fee, sqrtPriceX96) {
-            // Pool created successfully
-        } catch {
+        // Pool created successfully
+        }
+            catch {
             // Pool might already exist, which is fine
         }
 
@@ -455,8 +457,9 @@ contract ZRouterBenchTest is Test {
                 deadline: block.timestamp
             })
         ) {
-            // Liquidity added successfully
-        } catch {
+        // Liquidity added successfully
+        }
+            catch {
             // In case of failure, we'll continue with the test
             // The test may use existing liquidity or fail later if there's no liquidity
         }
@@ -467,13 +470,14 @@ contract ZRouterBenchTest is Test {
 
         // Initial price - assuming 1 ERC20 = 1 USDC (for simplicity)
         sqrtPriceX96 = address(erc20) < usdc
-            ? 79228162514264337593543950336 // price = 1
+            ? 79228162514264337593543950336  // price = 1
             : 79228162514264337593543950336; // price = 1
 
         vm.prank(usdcWhale);
         try positionManager.createAndInitializePoolIfNecessary(token0, token1, fee, sqrtPriceX96) {
-            // Pool created successfully
-        } catch {
+        // Pool created successfully
+        }
+            catch {
             // Pool might already exist, which is fine
         }
 
@@ -494,8 +498,9 @@ contract ZRouterBenchTest is Test {
                 deadline: block.timestamp
             })
         ) {
-            // Liquidity added successfully
-        } catch {
+        // Liquidity added successfully
+        }
+            catch {
             // In case of failure, we'll continue with the test
         }
     }

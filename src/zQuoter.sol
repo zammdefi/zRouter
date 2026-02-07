@@ -59,8 +59,9 @@ contract zQuoter {
         address hooks,
         uint256 swapAmount
     ) public view returns (uint256 amountIn, uint256 amountOut) {
-        return
-            ZQUOTER_BASE.quoteV4(exactOut, tokenIn, tokenOut, fee, tickSpacing, hooks, swapAmount);
+        return ZQUOTER_BASE.quoteV4(
+            exactOut, tokenIn, tokenOut, fee, tickSpacing, hooks, swapAmount
+        );
     }
 
     function quoteZAMM(
@@ -72,8 +73,9 @@ contract zQuoter {
         uint256 idOut,
         uint256 swapAmount
     ) public view returns (uint256 amountIn, uint256 amountOut) {
-        return
-            ZQUOTER_BASE.quoteZAMM(exactOut, feeOrHook, tokenIn, tokenOut, idIn, idOut, swapAmount);
+        return ZQUOTER_BASE.quoteZAMM(
+            exactOut, feeOrHook, tokenIn, tokenOut, idIn, idOut, swapAmount
+        );
     }
 
     function limit(bool exactOut, uint256 quoted, uint256 bps) public pure returns (uint256) {
@@ -331,16 +333,16 @@ contract zQuoter {
         // try stable (and underlying) first
         {
             bytes memory cd = exactOut
-                ? (
-                    underlying
-                        ? abi.encodeWithSelector(ICurveStableLike.get_dx_underlying.selector, i, j, amt)
-                        : abi.encodeWithSelector(ICurveStableLike.get_dx.selector, i, j, amt)
-                )
-                : (
-                    underlying
-                        ? abi.encodeWithSelector(ICurveStableLike.get_dy_underlying.selector, i, j, amt)
-                        : abi.encodeWithSelector(ICurveStableLike.get_dy.selector, i, j, amt)
-                );
+                ? (underlying
+                        ? abi.encodeWithSelector(
+                            ICurveStableLike.get_dx_underlying.selector, i, j, amt
+                        )
+                        : abi.encodeWithSelector(ICurveStableLike.get_dx.selector, i, j, amt))
+                : (underlying
+                        ? abi.encodeWithSelector(
+                            ICurveStableLike.get_dy_underlying.selector, i, j, amt
+                        )
+                        : abi.encodeWithSelector(ICurveStableLike.get_dy.selector, i, j, amt));
             (bool s, bytes memory r) = pool.staticcall(cd);
             if (s && r.length >= 32) {
                 uint256 q = abi.decode(r, (uint256));
@@ -443,8 +445,9 @@ contract zQuoter {
 
             // construct base calldata
             if (best.source == AMM.UNI_V2) {
-                callData =
-                    _buildV2Swap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline);
+                callData = _buildV2Swap(
+                    to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline
+                );
             } else if (best.source == AMM.SUSHI) {
                 callData = _buildV2Swap(
                     to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, type(uint256).max
@@ -500,7 +503,14 @@ contract zQuoter {
                 bool isStable,
                 uint8 iIdx,
                 uint8 jIdx
-            ) = quoteCurve(exactOut, tokenIn, tokenOut, swapAmount, 8 /*cap*/ );
+            ) =
+                quoteCurve(
+                    exactOut,
+                    tokenIn,
+                    tokenOut,
+                    swapAmount,
+                    8 /*cap*/
+                );
 
             // Skip exactOut stable-underlying when both indices are base coins,
             // because deployed zRouter expects basePools[i] for the backward get_dx.
@@ -797,115 +807,6 @@ contract zQuoter {
             return (a, b, calls, multicall, msgValue);
         }
     }
-
-    /*──────────────── helpers ───────────────*/
-
-    function _buildCallForQuote(
-        Quote memory q,
-        address to,
-        bool exactOut,
-        address tokenIn,
-        address tokenOut,
-        uint256 swapAmount,
-        uint256 amountLimit,
-        uint256 deadline
-    ) internal view returns (bytes memory callData) {
-        unchecked {
-            if (q.source == AMM.UNI_V2) {
-                callData =
-                    _buildV2Swap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline);
-            } else if (q.source == AMM.SUSHI) {
-                callData = _buildV2Swap(
-                    to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, type(uint256).max
-                );
-            } else if (q.source == AMM.ZAMM) {
-                callData = _buildZAMMSwap(
-                    to,
-                    exactOut,
-                    q.feeBps,
-                    tokenIn,
-                    tokenOut,
-                    0,
-                    0,
-                    swapAmount,
-                    amountLimit,
-                    deadline
-                );
-            } else if (q.source == AMM.UNI_V3) {
-                callData = _buildV3Swap(
-                    to,
-                    exactOut,
-                    uint24(q.feeBps * 100),
-                    tokenIn,
-                    tokenOut,
-                    swapAmount,
-                    amountLimit,
-                    deadline
-                );
-            } else if (q.source == AMM.UNI_V4) {
-                int24 spacing = _spacingFromBps(uint16(q.feeBps));
-                callData = _buildV4Swap(
-                    to,
-                    exactOut,
-                    uint24(q.feeBps * 100),
-                    spacing,
-                    tokenIn,
-                    tokenOut,
-                    swapAmount,
-                    amountLimit,
-                    deadline
-                );
-            } else if (q.source == AMM.CURVE) {
-                // Discover the concrete pool + indices for this hop
-                (
-                    /*amountIn*/
-                    ,
-                    /*amountOut*/
-                    ,
-                    address pool,
-                    bool useUnderlying,
-                    bool isStable,
-                    uint8 iIdx,
-                    uint8 jIdx
-                ) = quoteCurve(exactOut, tokenIn, tokenOut, swapAmount, 8 /* cap candidates */ );
-
-                if (pool == address(0)) revert NoRoute();
-                // Refuse unsafe build for deployed router
-                if (exactOut && isStable && useUnderlying && iIdx > 0 && jIdx > 0) revert NoRoute();
-
-                // Minimal 1-hop route for zRouter.swapCurve
-                address[11] memory route;
-                uint256[4][5] memory swapParams;
-                address[5] memory basePools; // empty for simple exchange
-
-                route[0] = tokenIn; // can be ETH(0x0) or ERC20
-                route[1] = pool;
-                route[2] = tokenOut; // can be ETH(0x0) or ERC20
-
-                // swap_type: 1=exchange, 2=exchange_underlying
-                uint256 st = (isStable && useUnderlying) ? 2 : 1;
-                // pool_type: 10=stable, 20=crypto (router uses this to branch)
-                uint256 pt = isStable ? 10 : 20;
-
-                // Pass real i/j indices
-                swapParams[0] = [uint256(iIdx), uint256(jIdx), st, pt];
-
-                callData = abi.encodeWithSelector(
-                    IZRouter.swapCurve.selector,
-                    to,
-                    exactOut,
-                    route,
-                    swapParams,
-                    basePools,
-                    swapAmount,
-                    amountLimit,
-                    deadline
-                );
-            } else {
-                revert UnsupportedAMM();
-            }
-        }
-    }
 }
 
 function _sortTokens(address tokenA, address tokenB)
@@ -946,10 +847,7 @@ address constant CURVE_ETH = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
 // ---- Curve interfaces ----
 interface ICurveMetaRegistry {
-    function find_pools_for_coins(address from, address to)
-        external
-        view
-        returns (address[] memory);
+    function find_pools_for_coins(address from, address to) external view returns (address[] memory);
     function get_coin_indices(address pool, address from, address to, uint256 handler_id)
         external
         view

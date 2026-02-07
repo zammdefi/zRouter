@@ -1,5 +1,5 @@
 [profile.default]
-solc_version = "0.8.30"
+solc_version = "0.8.33"
 evm_version = "prague"
 
 optimizer = true
@@ -10,7 +10,9 @@ via_ir = true
 remappings = [
   "@solady=lib/solady/",
   "@soledge=lib/soledge/",
-  "@forge=lib/forge-std/src/"
+  "@forge=lib/forge-std/src/",
+  "solady/=lib/solady/src/",
+  "soledge/=lib/soledge/src/"
 ]
 
 [profile.via-ir]

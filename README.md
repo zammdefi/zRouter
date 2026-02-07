@@ -18,6 +18,8 @@ Features:
 - bridges all liquid ERC20s with ERC6909 finance on zAMM
 - includes WETH abstraction for all ETH input and output
 
+V2 deployed to Ethereum: [0x0000000000001C3a3Aa8FDfca4f5c0c94583aC46](https://etherscan.io/address/0x0000000000001C3a3Aa8FDfca4f5c0c94583aC46#code)
+
 V1 deployed to Ethereum: [0x00000000008892d085e0611eb8C8BDc9FD856fD3](https://etherscan.io/address/0x00000000008892d085e0611eb8C8BDc9FD856fD3#code)
 
 V0 deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835) on Ethereum and Base.
