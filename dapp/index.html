@@ -1,0 +1,1903 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SWAP</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%230a0a0a'/><rect x='3' y='1' width='1' height='1' fill='%23e8e8e0'/><rect x='5' y='2' width='1' height='1' fill='%23e8e8e0'/><rect x='10' y='2' width='1' height='1' fill='%23e8e8e0'/><rect x='12' y='1' width='1' height='1' fill='%23e8e8e0'/><rect x='4' y='4' width='8' height='1' fill='%23e8e8e0'/><rect x='3' y='5' width='10' height='1' fill='%23e8e8e0'/><rect x='2' y='6' width='12' height='3' fill='%23e8e8e0'/><rect x='3' y='9' width='10' height='1' fill='%23e8e8e0'/><rect x='4' y='10' width='8' height='1' fill='%23e8e8e0'/><rect x='3' y='6' width='3' height='2' fill='%230a0a0a'/><rect x='10' y='6' width='3' height='2' fill='%230a0a0a'/><rect x='5' y='11' width='2' height='1' fill='%23e8e8e0'/><rect x='9' y='11' width='2' height='1' fill='%23e8e8e0'/><rect x='2' y='12' width='3' height='1' fill='%23e8e8e0'/><rect x='7' y='12' width='2' height='1' fill='%23e8e8e0'/><rect x='11' y='12' width='3' height='1' fill='%23e8e8e0'/><rect x='1' y='13' width='2' height='1' fill='%23e8e8e0'/><rect x='13' y='13' width='2' height='1' fill='%23e8e8e0'/></svg>" type="image/svg+xml">
+<script src="./ethers.min.js"></script>
+<script src="./walletconnect.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  background: #fff;
+  color: #000;
+  min-height: 100vh;
+  padding: 60px 20px;
+  padding-bottom: 20px;
+  max-width: 480px;
+  margin: 0 auto;
+}
+h1 {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 40px;
+}
+.section {
+  margin-bottom: 32px;
+}
+label {
+  display: block;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 8px;
+  color: #666;
+}
+input[type="number"], input[type="text"] {
+  width: 100%;
+  padding: 12px 0;
+  font-size: 24px;
+  font-family: inherit;
+  border: none;
+  border-bottom: 1px solid #000;
+  outline: none;
+  background: transparent;
+}
+input::placeholder { color: #ccc; }
+input:focus { border-bottom-width: 2px; }
+button {
+  display: inline-block;
+  padding: 12px 24px;
+  font-size: 12px;
+  font-family: inherit;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  background: #000;
+  color: #fff;
+  border: 1px solid #000;
+  cursor: pointer;
+  margin-right: 8px;
+  margin-top: 8px;
+  transition: all 0.2s;
+}
+button:hover { background: #333; }
+button:disabled { background: #ccc; border-color: #ccc; cursor: not-allowed; }
+button.secondary {
+  background: #fff;
+  color: #000;
+}
+button.secondary:hover { background: #f5f5f5; }
+
+/* Wallet button - fixed top right */
+.wallet {
+  position: fixed;
+  top: max(20px, env(safe-area-inset-top, 0px));
+  right: max(20px, env(safe-area-inset-right, 0px));
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  z-index: 100;
+}
+.wallet button { margin: 0; padding: 8px 16px; text-transform: none; }
+
+
+/* Token selector buttons */
+.token-select {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  background: #fff;
+  border: 1px solid #000;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+.token-select:hover { background: #f5f5f5; }
+.token-icon { width: 24px; height: 24px; display: inline-flex; align-items: center; }
+.token-symbol { font-weight: 600; color: #000; }
+
+/* Token input sections */
+.token-section {
+  margin-bottom: 24px;
+}
+.token-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.amount-input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid #000;
+  font-size: 24px;
+  font-weight: 400;
+  outline: none;
+  color: #000;
+  padding: 12px 0;
+  font-family: inherit;
+}
+.amount-input::placeholder { color: #ccc; }
+.amount-input:focus { border-bottom-width: 2px; }
+.balance {
+  font-size: 12px;
+  color: #666;
+  margin-top: 8px;
+}
+.token-subactions {
+  display: flex;
+  justify-content: flex-end;
+  margin: 6px 0;
+}
+.max-btn {
+  padding: 4px 10px;
+  border: 1px solid #000;
+  background: #fff;
+  color: #000;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin: 0;
+}
+.max-btn:hover { background: #000; color: #fff; }
+.max-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Swap arrow */
+.swap-arrow {
+  display: flex;
+  justify-content: center;
+  margin: 4px 0 16px;
+}
+.arrow-btn {
+  background: #fff;
+  border: 1px solid #000;
+  padding: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin: 0;
+}
+.arrow-btn:hover { transform: rotate(180deg); background: #f5f5f5; }
+
+/* Swap button */
+.swap-btn {
+  background: #000;
+  color: #fff;
+  border: 1px solid #000;
+  padding: 14px 24px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 16px;
+  transition: all 0.2s;
+}
+.swap-btn:hover:not(:disabled) { background: #333; }
+.swap-btn:disabled { background: #ccc; border-color: #ccc; cursor: not-allowed; }
+
+/* Quote info */
+.quote-info {
+  padding: 12px;
+  background: #f9f9f9;
+  margin-top: 16px;
+  font-size: 13px;
+  color: #000;
+  overflow: hidden;
+}
+.quote-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.quote-row > :nth-child(2) {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-align: right;
+}
+#routeInfo {
+  max-width: 65%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+#routeInfo[data-size="sm"] { font-size: 12px; }
+#routeInfo[data-size="xs"] { font-size: 11px; }
+
+/* Slippage inline */
+.slip-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: text;
+}
+.slip-unit {
+  color: #666;
+  font-weight: 600;
+  pointer-events: none;
+}
+.slip-num {
+  -webkit-appearance: none;
+  appearance: textfield;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid rgba(0,0,0,0.25);
+  border-radius: 0;
+  padding: 2px 0;
+  width: 4.5ch;
+  min-width: 3.5ch;
+  text-align: right;
+  font-size: 13px;
+  color: #000;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+.slip-num:hover { border-bottom-color: rgba(0,0,0,0.45); }
+.slip-num:focus { border-bottom-color: #000; }
+.slip-num::-webkit-outer-spin-button,
+.slip-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.slip-num[type="number"] { -moz-appearance: textfield; }
+
+/* Loading spinner */
+.loading {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #666;
+  border-top: 2px solid #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  vertical-align: middle;
+}
+@keyframes spin { 0% { transform: rotate(0); } 100% { transform: rotate(360deg); } }
+
+/* Token modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.8);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  justify-content: center;
+  align-items: center;
+  padding: 20px;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.modal-overlay.active { display: flex; }
+body.modal-open { overflow: hidden; }
+.modal {
+  background: #fff;
+  border: 2px solid #000;
+  padding: 20px;
+  width: 100%;
+  max-width: 360px;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+}
+.modal-title {
+  font-size: 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}
+.modal-close {
+  background: none;
+  border: none;
+  color: #000;
+  font-size: 24px;
+  cursor: pointer;
+  line-height: 1;
+  padding: 0;
+  margin: 0;
+}
+.modal-close:hover { opacity: 0.5; }
+
+/* Wallet modal options */
+.wallet-option {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #000;
+  cursor: pointer;
+  margin-bottom: 8px;
+  transition: all 0.15s;
+}
+.wallet-option:hover { background: #000; color: #fff; }
+.wallet-option-icon { font-size: 1.5rem; }
+.wallet-option-name { font-weight: 600; }
+.wallet-option.disconnect {
+  border-color: #f00;
+  color: #f00;
+  justify-content: center;
+}
+.wallet-option.disconnect:hover { background: #f00; color: #fff; }
+
+/* Token list in modal */
+.token-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.token-list-item:hover { background: #f0f0f0; }
+
+/* Custom token input */
+.custom-token-input {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  border-bottom: 1px solid #000;
+  margin-top: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  background: transparent;
+}
+.custom-token-input:focus { border-bottom-width: 2px; }
+
+/* Status */
+.status {
+  font-size: 13px;
+  margin-top: 16px;
+  padding: 12px;
+  background: #f9f9f9;
+  display: none;
+}
+.status.show { display: block; }
+.status.error { background: #fff0f0; }
+.status.success { background: #f0fff0; }
+
+/* Footer */
+.site-footer {
+  position: relative;
+  text-align: center;
+  padding: 40px 20px;
+  font-size: 11px;
+  opacity: 0.4;
+  letter-spacing: 0.5px;
+}
+.site-footer a {
+  color: inherit;
+  text-decoration: underline;
+}
+.site-footer a:hover { opacity: 0.7; }
+
+/* Responsive */
+@media (max-width: 700px) {
+  body { padding: 80px 16px 20px; }
+  .wallet { top: 16px; right: 16px; }
+  .wallet button { padding: 10px 14px; font-size: 11px; }
+  h1 { margin-bottom: 30px; font-size: 13px; }
+  input[type="number"], input[type="text"] { font-size: 20px; padding: 14px 0; }
+  .amount-input { font-size: 20px; }
+  .swap-btn { padding: 14px 20px; }
+  .modal { max-width: 100%; margin: 0 10px; }
+}
+@media (max-width: 380px) {
+  body { padding: 70px 12px 20px; }
+  input[type="number"], input[type="text"] { font-size: 18px; }
+  .amount-input { font-size: 18px; }
+  h1 { font-size: 12px; }
+}
+</style>
+</head>
+<body>
+
+<!-- Wallet button (fixed top-right) -->
+<div class="wallet">
+  <button id="walletBtn" onclick="toggleWallet()">connect</button>
+</div>
+
+<h1>Swap</h1>
+
+<!-- From token section -->
+<div class="section token-section">
+  <div class="token-header">
+    <label style="margin:0">From</label>
+    <div class="token-select" onclick="openTokenModal('from')">
+      <span id="fromTokenIcon" class="token-icon"></span>
+      <span id="fromTokenSymbol" class="token-symbol">ETH</span>
+    </div>
+  </div>
+  <div class="token-subactions">
+    <button class="max-btn" type="button" onclick="setMaxFromBalance()">MAX</button>
+  </div>
+  <input type="number" id="fromAmount" class="amount-input" placeholder="0.0" step="any">
+  <div id="fromBalance" class="balance">Balance: --</div>
+</div>
+
+<!-- Swap direction arrow -->
+<div class="swap-arrow">
+  <button class="arrow-btn" onclick="swapTokens()">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2"><path d="M7 10L12 15L17 10"/></svg>
+  </button>
+</div>
+
+<!-- To token section -->
+<div class="section token-section">
+  <div class="token-header">
+    <label style="margin:0">To</label>
+    <div class="token-select" onclick="openTokenModal('to')">
+      <span id="toTokenIcon" class="token-icon"></span>
+      <span id="toTokenSymbol" class="token-symbol">USDC</span>
+    </div>
+  </div>
+  <input type="number" id="toAmount" class="amount-input" placeholder="0.0" readonly>
+  <div id="toBalance" class="balance">Balance: --</div>
+</div>
+
+<!-- Quote info -->
+<div id="quoteInfo" class="quote-info" style="display:none">
+  <div class="quote-row">
+    <span>Route:</span><span id="routeInfo">--</span>
+  </div>
+  <div class="quote-row">
+    <span>Slippage:</span>
+    <span class="slip-inline">
+      <input id="slippagePct" class="slip-num" type="number" inputmode="decimal" min="0" max="20" step="0.1" value="0.5" aria-label="Slippage (%)">
+      <span class="slip-unit">%</span>
+    </span>
+  </div>
+</div>
+
+<!-- Swap button -->
+<button id="swapBtn" class="swap-btn" disabled>Connect Wallet</button>
+
+<!-- Status -->
+<div id="status" class="status"></div>
+
+<!-- Wallet Modal -->
+<div class="modal-overlay" id="walletModal" onclick="if(event.target===this)closeWalletModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Connect Wallet</div>
+      <button class="modal-close" onclick="closeWalletModal()">&times;</button>
+    </div>
+    <div class="modal-body" id="walletOptions"></div>
+  </div>
+</div>
+
+<!-- Token Modal -->
+<div class="modal-overlay" id="tokenModal" onclick="if(event.target===this)closeTokenModal()">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title">Select Token</div>
+      <button class="modal-close" onclick="closeTokenModal()">&times;</button>
+    </div>
+    <div id="tokenList"></div>
+    <input type="text" id="customTokenAddress" class="custom-token-input" placeholder="Enter token address">
+    <button style="margin-top:12px;width:100%" onclick="addCustomToken()">Add Custom Token</button>
+  </div>
+</div>
+
+<!-- Footer web ring -->
+<div class="site-footer">
+  <a href="./weiNS.html">Domains</a> · built by <a href="https://zamm.finance/dao" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg>zOrg</a> · <a href="https://zamm.finance" target="_blank" rel="noopener">zAMM</a>
+</div>
+
+<script>
+// ---- Constants ----
+const CHAIN_ID = 1;
+const ZQUOTER_ADDRESS = "0x9f373A73ED229C9D133A189c095E2fFb7B77703E";
+const ZROUTER_ADDRESS = "0x0000000000001C3a3Aa8FDfca4f5c0c94583aC46";
+const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
+const USDT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
+const WBTC_ADDRESS = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
+const WSTETH_ADDRESS = "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0";
+const RETH_ADDRESS = "0xae78736Cd615f374D3085123A210448E74Fc6393";
+const DAI_ADDRESS = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+
+// ---- DOM helpers ----
+const $ = id => document.getElementById(id);
+
+function escapeHtml(str) {
+  str = String(str ?? '');
+  return str.replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function setText(id, s) {
+  const el = typeof id === 'string' ? $(id) : id;
+  if (!el) return;
+  if (el.textContent !== s) el.textContent = s;
+}
+function setHTML(id, s) {
+  const el = typeof id === 'string' ? $(id) : id;
+  if (!el) return;
+  if (el.innerHTML !== s) el.innerHTML = s;
+}
+function setShown(id, shown) {
+  const el = typeof id === 'string' ? $(id) : id;
+  if (!el) return;
+  const want = shown ? '' : 'none';
+  if (el.style.display !== want) el.style.display = want;
+}
+function setDisabled(btn, disabled) {
+  const el = typeof btn === 'string' ? $(btn) : btn;
+  if (!el) return;
+  if (!!el.disabled !== !!disabled) el.disabled = !!disabled;
+}
+function escText(s) {
+  return String(s).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
+}
+function escAttr(s) {
+  return escText(s).replace(/"/g, '&quot;');
+}
+function debounce(fn, wait) {
+  let t;
+  return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), wait); };
+}
+
+// ---- Wallet state ----
+let provider = null;
+let signer = null;
+let connectedAddress = null;
+let connectedWalletProvider = null;
+let walletConnectProvider = null;
+let isConnecting = false;
+let walletEventHandlers = null;
+let isWalletConnect = false;
+let wcDeepLink = null;
+
+const eip6963Providers = new Map();
+
+// ---- EIP-6963 listener ----
+if (typeof window !== 'undefined') {
+  window.addEventListener('eip6963:announceProvider', (event) => {
+    try {
+      const { info, provider } = event.detail || {};
+      if (info?.uuid && provider) {
+        eip6963Providers.set(info.uuid, { info, provider });
+      }
+    } catch (e) {}
+  });
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+}
+
+// ---- Wallet helpers ----
+function findProvider(checkFn) {
+  if (window.ethereum?.providers?.length) {
+    for (const p of window.ethereum.providers) {
+      if (checkFn(p)) return p;
+    }
+  }
+  if (window.ethereum && checkFn(window.ethereum)) return window.ethereum;
+  return null;
+}
+
+const WALLET_CONFIG = {
+  metamask: { name: 'MetaMask', icon: '🦊', detect: () => findProvider(p => p.isMetaMask), getProvider: () => findProvider(p => p.isMetaMask) },
+  coinbase: { name: 'Coinbase', icon: '🔵', detect: () => findProvider(p => p.isCoinbaseWallet), getProvider: () => findProvider(p => p.isCoinbaseWallet) },
+  rabby: { name: 'Rabby', icon: '🐰', detect: () => findProvider(p => p.isRabby), getProvider: () => findProvider(p => p.isRabby) },
+  rainbow: { name: 'Rainbow', icon: '🌈', detect: () => findProvider(p => p.isRainbow), getProvider: () => findProvider(p => p.isRainbow) },
+  walletconnect: { name: 'WalletConnect', icon: '📱' }
+};
+
+function detectWallets() {
+  const detected = [];
+  const seenNames = new Set();
+
+  // 1. EIP-6963 providers first
+  for (const [uuid, { info, provider }] of eip6963Providers.entries()) {
+    const name = info?.name || 'Unknown';
+    if (!seenNames.has(name.toLowerCase())) {
+      const safeName = name.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+      const iconUrl = info.icon && (info.icon.startsWith('data:image/') || info.icon.startsWith('https://')) ? info.icon : null;
+      const safeIconUrl = iconUrl ? iconUrl.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : null;
+      detected.push({
+        key: `eip6963_${uuid}`,
+        name: safeName,
+        icon: safeIconUrl ? `<img src="${safeIconUrl}" style="width:1.5rem;height:1.5rem;border-radius:4px;">` : '🔌',
+        getProvider: () => provider
+      });
+      seenNames.add(name.toLowerCase());
+    }
+  }
+
+  // 2. Check window.ethereum.providers array
+  if (window.ethereum?.providers?.length) {
+    for (let i = 0; i < window.ethereum.providers.length; i++) {
+      const p = window.ethereum.providers[i];
+      const name = p.isMetaMask ? 'MetaMask' : p.isCoinbaseWallet ? 'Coinbase' : p.isRabby ? 'Rabby' : p.isRainbow ? 'Rainbow' : null;
+      if (name && !seenNames.has(name.toLowerCase())) {
+        detected.push({ key: `provider_${i}`, name, icon: '🔗', getProvider: () => p });
+        seenNames.add(name.toLowerCase());
+      }
+    }
+  }
+
+  // 3. Legacy WALLET_CONFIG detection
+  for (const [key, config] of Object.entries(WALLET_CONFIG)) {
+    if (key === 'walletconnect') continue;
+    try {
+      if (config.detect && config.detect() && !seenNames.has(config.name.toLowerCase())) {
+        detected.push({ key, ...config });
+        seenNames.add(config.name.toLowerCase());
+      }
+    } catch (e) {}
+  }
+
+  // 4. Fallback: if nothing detected but window.ethereum exists
+  if (detected.length === 0 && window.ethereum) {
+    detected.push({ key: 'injected', name: 'Browser Wallet', icon: '🔗', getProvider: () => window.ethereum });
+  }
+
+  // 5. WalletConnect
+  const wcModule = (typeof globalThis !== 'undefined' ? globalThis : window)['@walletconnect/ethereum-provider'];
+  if (wcModule?.EthereumProvider) {
+    detected.push({ key: 'walletconnect', name: 'WalletConnect', icon: '📱' });
+  }
+
+  return detected;
+}
+
+function showWalletModal() {
+  $('walletModal').classList.add('active');
+  document.body.classList.add('modal-open');
+  $('walletOptions').innerHTML = '<div style="padding:12px;text-align:center;">Detecting wallets...</div>';
+
+  window.dispatchEvent(new Event('eip6963:requestProvider'));
+
+  const doDetect = (attempt = 1) => {
+    const wallets = detectWallets();
+    const hasBrowserWallet = wallets.some(w => w.key !== 'walletconnect');
+    if (!hasBrowserWallet && attempt < 2) {
+      setTimeout(() => doDetect(attempt + 1), 250);
+    } else {
+      renderWalletModal(wallets);
+    }
+  };
+
+  setTimeout(() => doDetect(), 150);
+}
+
+function renderWalletModal(wallets) {
+  const container = $('walletOptions');
+
+  if (connectedAddress) {
+    const displayName = $('walletBtn').textContent;
+    const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
+    container.innerHTML = `
+      <div style="padding: 12px; border: 1px solid #000; margin-bottom: 12px;">
+        <div style="font-weight: 600; margin-bottom: 6px;">Connected</div>
+        ${showName ? `<div style="font-size: 16px; margin-bottom: 4px;">${escapeHtml(displayName)}</div>` : ''}
+        <div style="font-size: 12px; word-break: break-all; opacity: 0.6;">${connectedAddress}</div>
+      </div>
+      <div class="wallet-option disconnect" onclick="disconnectWallet()">
+        <span class="wallet-option-name">Disconnect</span>
+      </div>
+    `;
+  } else {
+    container.innerHTML = wallets.length > 0 ? wallets.map(w => `
+      <div class="wallet-option" onclick='connectWithWallet(${JSON.stringify(w.key)})'>
+        <span class="wallet-option-icon">${w.icon}</span>
+        <span class="wallet-option-name">${escapeHtml(w.name)}</span>
+      </div>
+    `).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
+  }
+}
+
+function closeWalletModal() {
+  $('walletModal').classList.remove('active');
+  document.body.classList.remove('modal-open');
+}
+
+function toggleWallet() {
+  showWalletModal();
+}
+
+// ---- WalletConnect transaction helper ----
+async function wcTransaction(txPromise, message = 'Confirm in your wallet app') {
+  if (!isWalletConnect) return txPromise;
+
+  const notif = document.createElement('div');
+  notif.id = 'wcNotif';
+  notif.innerHTML = `
+    <div style="position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:16px;text-align:center;z-index:10000;font-size:14px;">
+      <div style="margin-bottom:8px;">📱 ${message}</div>
+      <div style="font-size:12px;opacity:0.7;">Open your wallet app to approve the transaction</div>
+      ${wcDeepLink ? `<a href="${wcDeepLink}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#fff;color:#000;border-radius:4px;text-decoration:none;">Open Wallet</a>` : ''}
+    </div>
+  `;
+  document.body.appendChild(notif);
+
+  try {
+    const result = await txPromise;
+    return result;
+  } finally {
+    notif.remove();
+  }
+}
+
+// ---- waitForTx - robust tx confirmation ----
+async function waitForTx(tx, timeoutMs = 90000) {
+  const txHash = tx.hash;
+
+  async function pollReceipt(maxAttempts = 45) {
+    const p = quoteRPC ? await quoteRPC.call(rpc => rpc) : provider;
+    for (let i = 0; i < maxAttempts; i++) {
+      try {
+        const receipt = await p.getTransactionReceipt(txHash);
+        if (receipt) {
+          if (receipt.status === 0) throw new Error('Transaction reverted');
+          return receipt;
+        }
+      } catch (rpcErr) {
+        if (i === maxAttempts - 1) throw rpcErr;
+      }
+      await new Promise(r => setTimeout(r, 2000));
+    }
+    return null;
+  }
+
+  // For WalletConnect, always use polling
+  if (isWalletConnect) {
+    const receipt = await pollReceipt();
+    if (receipt) return receipt;
+    throw new Error('Transaction confirmation timeout');
+  }
+
+  // Race tx.wait() against timeout
+  let receipt = null;
+  let waitError = null;
+
+  try {
+    receipt = await Promise.race([
+      tx.wait(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), timeoutMs))
+    ]);
+  } catch (e) {
+    waitError = e;
+    const msg = (e.message || '').toLowerCase();
+    const shouldPoll = msg.includes('timeout') ||
+                       msg.includes('index') ||
+                       msg.includes('invalid_argument') ||
+                       msg.includes('invalid argument') ||
+                       msg.includes('could not coalesce') ||
+                       msg.includes('missing response');
+
+    if (shouldPoll && txHash) {
+      receipt = await pollReceipt();
+    }
+  }
+
+  if (receipt) return receipt;
+  throw waitError || new Error('Transaction confirmation timeout');
+}
+
+// ---- Connect with wallet ----
+async function connectWithWallet(walletKey) {
+  if (isConnecting) return;
+  isConnecting = true;
+
+  try {
+    closeWalletModal();
+    let walletProvider;
+
+    if (walletKey === 'walletconnect') {
+      const wcModule = (typeof globalThis !== 'undefined' ? globalThis : window)['@walletconnect/ethereum-provider'];
+      const WCProvider = wcModule?.EthereumProvider;
+
+      if (!WCProvider?.init) throw new Error('WalletConnect not available');
+
+      if (walletConnectProvider) {
+        try { await walletConnectProvider.disconnect?.(); } catch (e) {}
+        walletConnectProvider = null;
+      }
+
+      walletConnectProvider = await WCProvider.init({
+        projectId: '1e8390ef1c1d8a185e035912a1409749',
+        chains: [1],
+        showQrModal: true,
+        rpcMap: { 1: 'https://1rpc.io/eth' },
+        metadata: {
+          name: 'ETH Swap by zAMM',
+          description: 'Onchain DEX aggregator',
+          url: window.location.origin,
+          icons: []
+        }
+      });
+
+      walletConnectProvider.on('display_uri', (uri) => {
+        try {
+          const session = walletConnectProvider.session;
+          const peerMeta = session?.peer?.metadata;
+          if (peerMeta?.redirect?.native) wcDeepLink = peerMeta.redirect.native;
+          else if (peerMeta?.redirect?.universal) wcDeepLink = peerMeta.redirect.universal;
+        } catch (e) {}
+      });
+
+      await walletConnectProvider.enable();
+      walletProvider = walletConnectProvider;
+      isWalletConnect = true;
+
+      try {
+        const session = walletConnectProvider.session;
+        const peerMeta = session?.peer?.metadata;
+        if (peerMeta?.redirect?.native) wcDeepLink = peerMeta.redirect.native;
+        else if (peerMeta?.redirect?.universal) wcDeepLink = peerMeta.redirect.universal;
+      } catch (e) {}
+    } else if (walletKey.startsWith('eip6963_')) {
+      const uuid = walletKey.replace('eip6963_', '');
+      walletProvider = eip6963Providers.get(uuid)?.provider;
+      if (!walletProvider) {
+        const savedName = localStorage.getItem('zswap_wallet_name')?.toLowerCase();
+        if (savedName) {
+          for (const [, { info, provider }] of eip6963Providers) {
+            if (info?.name?.toLowerCase() === savedName) {
+              walletProvider = provider;
+              break;
+            }
+          }
+        }
+      }
+      isWalletConnect = false;
+      wcDeepLink = null;
+    } else {
+      walletProvider = WALLET_CONFIG[walletKey]?.getProvider() || window.ethereum;
+      isWalletConnect = false;
+      wcDeepLink = null;
+    }
+
+    if (!walletProvider) throw new Error('Wallet not found');
+
+    if (walletKey !== 'walletconnect') {
+      await walletProvider.request({ method: 'eth_requestAccounts' });
+    }
+
+    // Check/switch chain
+    const chainId = await walletProvider.request({ method: 'eth_chainId' });
+    if (BigInt(chainId) !== 1n) {
+      try {
+        await walletProvider.request({
+          method: 'wallet_switchEthereumChain',
+          params: [{ chainId: '0x1' }]
+        });
+        const newChainId = await walletProvider.request({ method: 'eth_chainId' });
+        if (BigInt(newChainId) !== 1n) throw new Error('Chain switch failed');
+      } catch (switchErr) {
+        showStatus('Please switch to Ethereum Mainnet', 'error');
+        if (walletKey === 'walletconnect') {
+          try { walletConnectProvider?.disconnect(); } catch (e) {}
+          walletConnectProvider = null;
+        }
+        isWalletConnect = false;
+        wcDeepLink = null;
+        return;
+      }
+    }
+
+    // Initialize globals
+    provider = new ethers.BrowserProvider(walletProvider);
+    signer = await provider.getSigner();
+    connectedAddress = await signer.getAddress();
+    connectedWalletProvider = walletProvider;
+    updateWalletDisplay();
+
+    // Store handlers for cleanup
+    walletEventHandlers = {
+      accountsChanged: () => window.location.reload(),
+      chainChanged: () => window.location.reload()
+    };
+    walletProvider.on('accountsChanged', walletEventHandlers.accountsChanged);
+    walletProvider.on('chainChanged', walletEventHandlers.chainChanged);
+
+    try {
+      localStorage.setItem('zswap_wallet', walletKey);
+      if (walletKey.startsWith('eip6963_')) {
+        const uuid = walletKey.replace('eip6963_', '');
+        const name = eip6963Providers.get(uuid)?.info?.name;
+        if (name) localStorage.setItem('zswap_wallet_name', name);
+      }
+    } catch (e) {}
+
+    // Clear ERC20 reader caches (provider changed)
+    _erc20Read.clear();
+    _erc20BalCache.clear();
+
+    // Update swap UI
+    setText('swapBtn', 'Enter an amount');
+    setDisabled('swapBtn', true);
+    updateBalances();
+    updateWcBanner();
+
+    const preAmt = $('fromAmount')?.value?.trim();
+    if (preAmt) handleAmountChange();
+
+  } catch (error) {
+    handleError(error);
+  } finally {
+    isConnecting = false;
+  }
+}
+
+function updateWcBanner() {
+  const existing = $('wcBanner');
+  if (existing) existing.remove();
+
+  if (isWalletConnect && connectedAddress) {
+    const banner = document.createElement('div');
+    banner.id = 'wcBanner';
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:10px 16px;display:flex;justify-content:space-between;align-items:center;z-index:9000;font-size:13px;';
+    banner.innerHTML = `
+      <span>📱 Connected via WalletConnect</span>
+      <button onclick="disconnectWallet()" style="background:#fff;color:#000;border:none;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:12px;">Disconnect</button>
+    `;
+    document.body.prepend(banner);
+    document.body.style.paddingTop = '44px';
+  } else {
+    document.body.style.paddingTop = '';
+  }
+}
+
+function updateWalletDisplay() {
+  if (!connectedAddress) {
+    $('walletBtn').textContent = 'connect';
+    updateWcBanner();
+    return;
+  }
+  $('walletBtn').textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
+  updateWcBanner();
+}
+
+function disconnectWallet() {
+  if (connectedWalletProvider && walletEventHandlers) {
+    try {
+      connectedWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
+      connectedWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
+    } catch (e) {}
+  }
+  walletEventHandlers = null;
+
+  if (walletConnectProvider) {
+    try { walletConnectProvider.disconnect(); } catch (e) {}
+    walletConnectProvider = null;
+  }
+  provider = null;
+  signer = null;
+  connectedAddress = null;
+  connectedWalletProvider = null;
+  isWalletConnect = false;
+  wcDeepLink = null;
+  $('walletBtn').textContent = 'connect';
+  updateWcBanner();
+  closeWalletModal();
+  try { localStorage.removeItem('zswap_wallet'); localStorage.removeItem('zswap_wallet_name'); } catch (e) {}
+
+  // Reset swap UI
+  setText('swapBtn', 'Connect Wallet');
+  setDisabled('swapBtn', false);
+  setText('fromBalance', 'Balance: --');
+  setText('toBalance', 'Balance: --');
+  setShown('quoteInfo', false);
+  $('toAmount').value = '';
+  _erc20Read.clear();
+  _erc20BalCache.clear();
+}
+
+function showStatus(msg, type) {
+  const el = $('status');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'status show' + (type ? ' ' + type : '');
+  setTimeout(() => { el.className = 'status'; }, 5000);
+}
+
+function handleError(e) {
+  const msg = (e.message || e.reason || String(e)).toLowerCase();
+  if (msg.includes('user rejected') || msg.includes('user denied') || msg.includes('user cancelled')) return;
+  showStatus(e.message || 'An error occurred', 'error');
+}
+
+// ---- Token data ----
+let currentModal = null;
+const tokens = {
+  ETH: { address: ZERO_ADDRESS, symbol: "ETH", decimals: 18 },
+  USDC: { address: USDC_ADDRESS, symbol: "USDC", decimals: 6 },
+  USDT: { address: USDT_ADDRESS, symbol: "USDT", decimals: 6 },
+  DAI: { address: DAI_ADDRESS, symbol: "DAI", decimals: 18 },
+  WBTC: { address: WBTC_ADDRESS, symbol: "WBTC", decimals: 8 },
+  wstETH: { address: WSTETH_ADDRESS, symbol: "wstETH", decimals: 18 },
+  rETH: { address: RETH_ADDRESS, symbol: "rETH", decimals: 18 },
+};
+
+// Load custom tokens from localStorage
+try {
+  const saved = JSON.parse(localStorage.getItem('zswap_custom_tokens') || '[]');
+  for (const t of saved) {
+    if (t.address && t.symbol && t.decimals != null && !tokens[t.symbol]) {
+      tokens[t.symbol] = { address: t.address, symbol: t.symbol, decimals: t.decimals };
+    }
+  }
+} catch (_) {}
+
+function saveCustomTokens() {
+  try {
+    const builtIn = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS].map(a => a.toLowerCase()));
+    const custom = Object.values(tokens).filter(t => !builtIn.has(t.address.toLowerCase()));
+    localStorage.setItem('zswap_custom_tokens', JSON.stringify(custom));
+  } catch (_) {}
+}
+
+let fromToken = "ETH";
+let toToken = "USDC";
+let _balSeq = 0;
+let slippageBps = 50;
+
+// ---- Token Icons ----
+const ETH_ICON = `<svg fill="#000000" width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill-rule="evenodd"><path d="M16 32C7.163 32 0 24.837 0 16S7.163 0 16 0s16 7.163 16 16-7.163 16-16 16zm7.994-15.781L16.498 4 9 16.22l7.498 4.353 7.496-4.354zM24 17.616l-7.502 4.351L9 17.617l7.498 10.378L24 17.616z"/><g fill-rule="nonzero"><path fill-opacity=".298" d="M16.498 4v8.87l7.497 3.35zm0 17.968v6.027L24 17.616z"/><path fill-opacity=".801" d="M16.498 20.573l7.497-4.353-7.497-3.348z"/><path fill-opacity=".298" d="M9 16.22l7.498 4.353v-7.701z"/></g></g></svg>`;
+const USDC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
+const USDT_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>`;
+const WBTC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path fill="#FFF" fill-rule="nonzero" d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></g></svg>`;
+const WSTETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M9.437 14.864l-.181.275c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 0 0 0 0-6.536-12.452z" fill="#FFF"/><path opacity=".6" d="M15.997 18.611l-6.56-3.747c6.56 12.452 6.56 12.452 6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".6" d="M22.563 14.864l.181.275c2.048 3.097 1.603 7.253-1.034 9.824-1.561 1.521-3.622 2.353-5.683 2.353 0 0 0 0 6.536-12.452z" fill="#FFF"/><path opacity=".2" d="M16.003 18.611l6.56-3.747c-6.56 12.452-6.56 12.452-6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/></g></svg>`;
+const RETH_ICON = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#FFAA6B;stop-opacity:1"/><stop offset="100%" style="stop-color:#FF8A5B;stop-opacity:1"/></linearGradient></defs><circle cx="100" cy="100" r="95" fill="#FFC93D"/><circle cx="100" cy="100" r="88" fill="#FF6B6B"/><circle cx="100" cy="100" r="82" fill="url(#bgGradient)"/><g transform="translate(100, 100) rotate(45)"><path d="M -8 -25 C -8 -30, -5 -35, 0 -35 C 5 -35, 8 -30, 8 -25 L 8 -5 L 18 5 L 18 15 L 8 10 L 8 20 L 0 25 L -8 20 L -8 10 L -18 15 L -18 5 L -8 -5 Z" fill="white"/><circle cx="0" cy="-20" r="4" fill="#FF8A5B"/><path d="M -6 20 L -9 35 L -3 30 L 0 38 L 3 30 L 9 35 L 6 20 Z" fill="white"/></g></svg>`;
+const DAI_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle fill="#F4B731" fill-rule="nonzero" cx="16" cy="16" r="16"/><path d="M9.277 8h6.552c3.985 0 7.006 2.116 8.13 5.194H26v1.861h-1.611c.031.294.047.594.047.898v.046c0 .342-.02.68-.06 1.01H26v1.86h-2.08C22.767 21.905 19.77 24 15.83 24H9.277v-5.131H7v-1.86h2.277v-1.954H7v-1.86h2.277V8zm1.831 10.869v3.462h4.72c2.914 0 5.078-1.387 6.085-3.462H11.108zm11.366-1.86H11.108v-1.954h11.37c.041.307.063.622.063.944v.045c0 .329-.023.65-.067.964zM15.83 9.665c2.926 0 5.097 1.424 6.098 3.528h-10.82V9.666h4.72z" fill="#FFF"/></g></svg>`;
+const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#000" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="#000" font-size="12" font-weight="bold">?</text></svg>`;
+
+const ICONS = {
+  ETH: ETH_ICON, USDC: USDC_ICON, USDT: USDT_ICON, WBTC: WBTC_ICON,
+  wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON,
+};
+
+// ---- Icon generation for custom tokens ----
+const _letterIconCache = new Map();
+function iconForSymbol(sym) {
+  const s = String(sym);
+  if (ICONS[s]) return ICONS[s];
+  if (_letterIconCache.has(s)) return _letterIconCache.get(s);
+  const svg = makeLetterIcon(s);
+  _letterIconCache.set(s, svg);
+  return svg;
+}
+
+function makeLetterIcon(sym) {
+  try {
+    const full = String(sym ?? '').trim();
+    const clean = full.toUpperCase().replace(/[^A-Z0-9]/g, '') || '?';
+    const show = clean.length <= 5 ? clean : clean.slice(0, 4) + '…';
+    const L = show.length;
+    const fontSize = L <= 1 ? 8.2 : L === 2 ? 7.4 : L === 3 ? 6.3 : L === 4 ? 5.4 : 4.6;
+    let hue = 0;
+    for (let i = 0, n = Math.min(clean.length, 12); i < n; i++) {
+      hue = (hue * 31 + clean.charCodeAt(i)) % 360;
+    }
+    return `<svg width="24" height="24" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg" aria-label="${escAttr(full)}">` +
+      `<title>${escText(full)}</title>` +
+      `<circle cx="12" cy="12" r="11" fill="hsl(${hue},70%,55%)" stroke="#000" stroke-width="2"/>` +
+      `<text x="12" y="12.2" text-anchor="middle" dominant-baseline="middle"` +
+      ` font-family="Helvetica,Arial,sans-serif"` +
+      ` font-size="${fontSize}" font-weight="700" fill="#fff">${escText(show)}</text>` +
+      `</svg>`;
+  } catch (e) {
+    return DEFAULT_ICON;
+  }
+}
+
+// ---- RPC fallback system ----
+const RPCS = [
+  "https://eth.llamarpc.com",
+  "https://ethereum.publicnode.com",
+  "https://1rpc.io/eth",
+  "https://rpc.ankr.com/eth",
+];
+
+function makeWalletReader() {
+  try {
+    if (!window.ethereum) return null;
+    const bp = new ethers.BrowserProvider(window.ethereum, CHAIN_ID);
+    return bp;
+  } catch { return null; }
+}
+
+function makeFallbackProvider(urls) {
+  const network = { chainId: CHAIN_ID, name: "mainnet" };
+  const nodes = urls.map(u => ({
+    url: u,
+    p: new ethers.JsonRpcProvider(u, network),
+    downUntil: 0,
+    warmed: false,
+    ok: true,
+  }));
+
+  const walletReader = makeWalletReader();
+  if (walletReader) {
+    nodes.push({
+      url: "wallet",
+      p: walletReader,
+      downUntil: 0,
+      warmed: true,
+      ok: true,
+    });
+  }
+
+  const withTimeout = (ms, work) =>
+    Promise.race([
+      work(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("timeout")), ms)),
+    ]);
+
+  const isInfraErr = (e) => {
+    const s = String(e?.message || "");
+    return /server response 400\b/i.test(s) ||
+      /502|503|504|ECONNRESET|ENETUNREACH|EAI_AGAIN|Failed to fetch/i.test(s) ||
+      /failed to detect network|timeout|timed out|ETIMEDOUT/i.test(s);
+  };
+  const isAuthErr = (e) => /Unauthorized|invalid api key|403|401/i.test(String(e?.message || ""));
+
+  return {
+    async call(fn) {
+      const now = Date.now();
+      let lastErr;
+      const candidates = nodes
+        .filter(n => n.ok && n.downUntil <= now)
+        .concat(nodes.filter(n => n.ok && n.downUntil > now));
+
+      for (const n of candidates) {
+        try {
+          if (!n.warmed && n.url !== "wallet") {
+            await withTimeout(1200, () => n.p.getNetwork());
+            n.warmed = true;
+          }
+          const res = await withTimeout(3500, () => fn(n.p));
+          n.downUntil = 0;
+          return res;
+        } catch (e) {
+          lastErr = e;
+          if (isAuthErr(e)) n.ok = false;
+          else if (isInfraErr(e)) n.downUntil = Date.now() + 30_000;
+        }
+      }
+      throw lastErr || new Error("All RPCs failed");
+    },
+  };
+}
+
+const quoteRPC = makeFallbackProvider(RPCS);
+
+// ---- Formatting helpers ----
+const fmt = (nStr, max = 6) => {
+  if (nStr == null) return "--";
+  const n = Number(nStr);
+  if (!Number.isFinite(n) || Math.abs(n) >= 1e21) {
+    const s = String(nStr);
+    return s.includes(".")
+      ? s.replace(new RegExp(`(\\.\\d{0,${max}}).*$`), "$1").replace(/\.?0+$/, "")
+      : s;
+  }
+  return n.toLocaleString(undefined, { maximumFractionDigits: max });
+};
+
+// ---- Allowance cache ----
+const _allowTTLms = 10_000;
+const _allowCache = new Map();
+const _allowKey = (token, owner, spender) =>
+  `${token.toLowerCase()}:${owner.toLowerCase()}:${spender.toLowerCase()}`;
+
+function cacheSetAllowance(token, owner, spender, v) {
+  _allowCache.set(_allowKey(token, owner, spender), { v, t: Date.now() });
+}
+function cacheGetAllowance(token, owner, spender) {
+  const hit = _allowCache.get(_allowKey(token, owner, spender));
+  return hit && Date.now() - hit.t < _allowTTLms ? hit.v : null;
+}
+
+function safeParseUnits(valStr, decimals) {
+  const s = String(valStr).trim();
+  if (!s) throw new Error("Empty amount");
+  const m = s.match(/^(\d+)(?:\.(\d+))?$/);
+  if (!m) throw new Error("Invalid number");
+  const frac = m[2] || "";
+  if (frac.length > decimals) throw new Error(`Too many decimals (max ${decimals})`);
+  return ethers.parseUnits(s, decimals);
+}
+
+// ---- Permit config ----
+const PERMIT_CONFIG = {
+  [USDC_ADDRESS.toLowerCase()]: {
+    type: 'eip2612',
+    domain: { name: 'USD Coin', version: '2', chainId: 1, verifyingContract: USDC_ADDRESS },
+    routerFn: 'permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+  },
+  [DAI_ADDRESS.toLowerCase()]: {
+    type: 'dai',
+    domain: { name: 'Dai Stablecoin', version: '1', chainId: 1, verifyingContract: DAI_ADDRESS },
+    routerFn: 'permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)',
+  },
+};
+
+async function signPermit(config, tokenAddress) {
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 3600);
+  const owner = connectedAddress;
+  const spender = ZROUTER_ADDRESS;
+
+  // Fetch nonce from token contract
+  const nonceIface = new ethers.Interface(['function nonces(address) view returns (uint256)']);
+  const nonceData = nonceIface.encodeFunctionData('nonces', [owner]);
+  const nonceResult = await quoteRPC.call(rpc => rpc.call({ to: tokenAddress, data: nonceData }));
+  const nonce = nonceIface.decodeFunctionResult('nonces', nonceResult)[0];
+
+  let types, values;
+  if (config.type === 'dai') {
+    types = {
+      Permit: [
+        { name: 'holder', type: 'address' },
+        { name: 'spender', type: 'address' },
+        { name: 'nonce', type: 'uint256' },
+        { name: 'expiry', type: 'uint256' },
+        { name: 'allowed', type: 'bool' },
+      ],
+    };
+    values = { holder: owner, spender, nonce, expiry: deadline, allowed: true };
+  } else {
+    types = {
+      Permit: [
+        { name: 'owner', type: 'address' },
+        { name: 'spender', type: 'address' },
+        { name: 'value', type: 'uint256' },
+        { name: 'nonce', type: 'uint256' },
+        { name: 'deadline', type: 'uint256' },
+      ],
+    };
+    values = { owner, spender, value: ethers.MaxUint256, nonce, deadline };
+  }
+
+  const sig = await signer.signTypedData(config.domain, types, values);
+  const { v, r, s } = ethers.Signature.from(sig);
+  return { v, r, s, nonce, deadline, config };
+}
+
+function buildPermitMulticall(calls, permitData) {
+  const iface = new ethers.Interface([
+    'function ' + permitData.config.routerFn,
+    'function multicall(bytes[]) payable returns (bytes[])',
+  ]);
+  let permitCall;
+  if (permitData.config.type === 'dai') {
+    permitCall = iface.encodeFunctionData('permitDAI', [permitData.nonce, permitData.deadline, permitData.v, permitData.r, permitData.s]);
+  } else {
+    permitCall = iface.encodeFunctionData('permit', [permitData.config.domain.verifyingContract, ethers.MaxUint256, permitData.deadline, permitData.v, permitData.r, permitData.s]);
+  }
+  return iface.encodeFunctionData('multicall', [[permitCall, ...calls]]);
+}
+
+// ---- ERC20 readers (cached, recreated on provider change) ----
+const _erc20Read = new Map();
+function erc20Read(address) {
+  const k = address.toLowerCase();
+  if (!_erc20Read.has(k)) {
+    _erc20Read.set(k, new ethers.Contract(
+      address,
+      ["function allowance(address,address) view returns (uint256)"],
+      provider
+    ));
+  }
+  return _erc20Read.get(k);
+}
+
+const _erc20BalCache = new Map();
+function erc20Reader(address) {
+  const k = address.toLowerCase();
+  if (!_erc20BalCache.has(k)) {
+    _erc20BalCache.set(k, new ethers.Contract(
+      address,
+      ["function balanceOf(address) view returns (uint256)"],
+      provider
+    ));
+  }
+  return _erc20BalCache.get(k);
+}
+
+// ---- Balance updates ----
+async function updateBalances() {
+  if (!provider || !connectedAddress) return;
+
+  const seq = ++_balSeq;
+  const fromSnap = fromToken, toSnap = toToken;
+  const f = tokens[fromSnap], t = tokens[toSnap];
+  const fromIsEth = f.address === ZERO_ADDRESS;
+  const toIsEth = t.address === ZERO_ADDRESS;
+
+  try {
+    const balances = Object.create(null);
+    const fetches = [];
+
+    if (fromIsEth || toIsEth) {
+      fetches.push((async () => { balances.ETH = await provider.getBalance(connectedAddress); })());
+    }
+    if (!fromIsEth) {
+      const keyF = f.address.toLowerCase();
+      fetches.push((async () => {
+        const c = erc20Reader(f.address);
+        balances[keyF] = await c.balanceOf(connectedAddress);
+      })());
+    }
+    if (!toIsEth) {
+      const keyT = t.address.toLowerCase();
+      if (!(!fromIsEth && keyT === f.address.toLowerCase())) {
+        fetches.push((async () => {
+          const c = erc20Reader(t.address);
+          balances[keyT] = await c.balanceOf(connectedAddress);
+        })());
+      }
+    }
+
+    await Promise.all(fetches);
+
+    if (seq !== _balSeq || fromSnap !== fromToken || toSnap !== toToken) return;
+
+    const fromStr = fromIsEth
+      ? `${fmt(ethers.formatEther(balances.ETH))} ETH`
+      : `${fmt(ethers.formatUnits(balances[f.address.toLowerCase()], f.decimals))} ${f.symbol}`;
+    const toStr = toIsEth
+      ? `${fmt(ethers.formatEther(balances.ETH))} ETH`
+      : `${fmt(ethers.formatUnits(balances[t.address.toLowerCase()], t.decimals))} ${t.symbol}`;
+
+    setText("fromBalance", `Balance: ${fromStr}`);
+    setText("toBalance", `Balance: ${toStr}`);
+  } catch (e) {
+    console.error("Balance update error:", e);
+  }
+}
+
+// ---- AMM names ----
+const AMM_NAMES = {
+  0: "Uniswap V2", 1: "SushiSwap", 2: "zAMM",
+  3: "Uniswap V3", 4: "Uniswap V4", 5: "Curve",
+};
+
+// ---- Quoting ----
+let _quoteSeq = 0;
+
+async function handleAmountChange() {
+  const amtStr = $("fromAmount").value.trim();
+  const swapBtn = $("swapBtn");
+  const toAmountEl = $("toAmount");
+  const quoteInfoEl = $("quoteInfo");
+
+  if (!connectedAddress) {
+    setText(swapBtn, "Connect Wallet");
+    setDisabled(swapBtn, false);
+    setShown(quoteInfoEl, false);
+    toAmountEl.value = "";
+    return;
+  }
+
+  const amtNum = Number(amtStr);
+  if (!amtStr || !Number.isFinite(amtNum) || amtNum <= 0) {
+    toAmountEl.value = "";
+    setShown(quoteInfoEl, false);
+    setText(swapBtn, "Enter an amount");
+    setDisabled(swapBtn, true);
+    return;
+  }
+
+  if (fromToken === toToken) {
+    toAmountEl.value = "";
+    setShown(quoteInfoEl, false);
+    setText(swapBtn, "Select different tokens");
+    setDisabled(swapBtn, true);
+    return;
+  }
+
+  if (!provider) return;
+
+  const seq = ++_quoteSeq;
+  const fromSnap = fromToken, toSnap = toToken;
+
+  try {
+    setHTML(swapBtn, `<span class="loading"></span> Getting quote...`);
+    setDisabled(swapBtn, true);
+
+    const quote = await requestQuote(amtStr, fromSnap, toSnap);
+
+    if (seq !== _quoteSeq || fromSnap !== fromToken || toSnap !== toToken) return;
+
+    const toData = tokens[toSnap];
+    const outStr = ethers.formatUnits(quote.expectedOutput, toData.decimals);
+    if (toAmountEl.value !== outStr) toAmountEl.value = outStr;
+
+    const route = quote.isTwoHop
+      ? `${quote.sourceA} + ${quote.sourceB}`
+      : `${quote.sourceA}`;
+    fitRouteText(route);
+    setShown(quoteInfoEl, true);
+
+    // Allowance check
+    const fromData = tokens[fromSnap];
+    let btnLabel = "Swap";
+    if (fromData.address !== ZERO_ADDRESS) {
+      const amountIn = safeParseUnits(amtStr, fromData.decimals);
+      let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS);
+      if (allowance == null) {
+        const r = erc20Read(fromData.address);
+        allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
+        cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
+      }
+      if (allowance < amountIn) {
+        const permitCfg = PERMIT_CONFIG[fromData.address.toLowerCase()];
+        btnLabel = permitCfg ? "Swap" : "Approve & Swap";
+      }
+    }
+
+    setText(swapBtn, btnLabel);
+    setDisabled(swapBtn, false);
+  } catch (e) {
+    console.error("Quote error:", e);
+    const msg = /Too many decimals|Invalid number|Empty amount/i.test(String(e?.message || ""))
+      ? e.message : "Re-trying…";
+    setText(swapBtn, msg);
+    setTimeout(() => {
+      if (seq === _quoteSeq) {
+        setText(swapBtn, "Enter an amount");
+        setDisabled(swapBtn, true);
+      }
+    }, 1500);
+  }
+}
+
+async function setMaxFromBalance() {
+  try {
+    if (!provider || !connectedAddress) {
+      toggleWallet();
+      return;
+    }
+
+    const f = tokens[fromToken];
+    let raw;
+
+    if (f.address === ZERO_ADDRESS) {
+      raw = await provider.getBalance(connectedAddress);
+      raw = (raw * 95n) / 100n;
+      if (raw < 0n) raw = 0n;
+    } else {
+      const c = new ethers.Contract(
+        f.address,
+        ["function balanceOf(address) view returns (uint256)"],
+        provider
+      );
+      raw = await c.balanceOf(connectedAddress);
+    }
+
+    const maxStr = ethers.formatUnits(raw, f.decimals);
+    const pretty = maxStr.includes(".") ? maxStr.replace(/\.?0+$/, "") : maxStr;
+
+    const input = $("fromAmount");
+    input.value = pretty || "0";
+    handleAmountChange();
+  } catch (e) {
+    console.error("MAX error:", e);
+  }
+}
+
+// ---- Slippage ----
+const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+function readSlippage(finalize = false) {
+  const el = $("slippagePct");
+  if (!el) return;
+  const raw = el.value;
+  let v = parseFloat(raw);
+  if (Number.isFinite(v)) {
+    v = clamp(v, 0, 20);
+    slippageBps = Math.round(v * 100);
+    if (finalize) {
+      const stepDigits = (String(el.step || "0.1").split(".")[1] || "").length;
+      el.value = v.toFixed(stepDigits);
+    }
+  } else if (finalize) {
+    if (!Number.isFinite(slippageBps)) slippageBps = 50;
+    const stepDigits = (String(el.step || "0.1").split(".")[1] || "").length;
+    el.value = clamp(slippageBps / 100, 0, 20).toFixed(stepDigits);
+  }
+}
+
+function initSimpleSlippage() {
+  const el = $("slippagePct");
+  if (!el || el.dataset.inited === "1") return;
+  el.dataset.inited = "1";
+  readSlippage(false);
+
+  const reQuote = debounce(() => {
+    const amt = $("fromAmount")?.value;
+    if (amt) handleAmountChange();
+  }, 250);
+
+  el.addEventListener("input", () => { readSlippage(false); reQuote(); });
+  el.addEventListener("blur", () => { readSlippage(true); reQuote(); });
+  el.addEventListener("keydown", (e) => {
+    if (e.key !== "ArrowUp" && e.key !== "ArrowDown") return;
+    e.preventDefault();
+    const step = parseFloat(el.step || "0.01") || 0.01;
+    const digits = (String(step).split(".")[1] || "").length;
+    const cur = parseFloat(el.value || "0") || 0;
+    const dir = e.key === "ArrowUp" ? 1 : -1;
+    const next = clamp(cur + dir * step, 0, 20);
+    el.value = next.toFixed(digits);
+    readSlippage(true);
+    reQuote();
+  });
+}
+document.addEventListener("DOMContentLoaded", initSimpleSlippage);
+
+// ---- Quote via RPC ----
+async function getQuote(fromAmountStr, fromSym, toSym) {
+  if (!connectedAddress) throw new Error("Connect wallet to get a quote");
+  const fromData = tokens[fromSym], toData = tokens[toSym];
+  if (!fromData || !toData) throw new Error("Unknown token");
+  if (fromData.address === toData.address) throw new Error("Same token");
+
+  const amountIn = safeParseUnits(fromAmountStr, fromData.decimals);
+  readSlippage(true);
+
+  const quoterAbi = [
+    "function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)",
+  ];
+  return await quoteRPC.call(async (rpc) => {
+    const quoter = new ethers.Contract(ZQUOTER_ADDRESS, quoterAbi, rpc);
+    const r = await quoter.buildBestSwapViaETHMulticall(
+      connectedAddress, connectedAddress, false,
+      tokens[fromSym].address, tokens[toSym].address,
+      amountIn, BigInt(slippageBps),
+      BigInt(Math.trunc(Date.now() / 1000) + 300),
+      { blockTag: "latest" }
+    );
+
+    const isTwoHop = r.b.amountOut > 0n;
+    const expectedOutput = isTwoHop ? r.b.amountOut : r.a.amountOut;
+    return {
+      expectedOutput,
+      multicall: r.multicall,
+      calls: r.calls,
+      msgValue: r.msgValue ?? 0n,
+      isTwoHop,
+      sourceA: AMM_NAMES[r.a.source] || "Unknown",
+      sourceB: isTwoHop ? AMM_NAMES[r.b.source] || "Unknown" : null,
+    };
+  });
+}
+
+async function withRetry(task, { tries = 3, base = 120 } = {}) {
+  let attempt = 0, lastErr;
+  while (attempt < tries) {
+    try { return await task(); } catch (e) {
+      const s = String(e?.message || "");
+      const transient = /missing revert data|CALL_EXCEPTION|timeout|ETIMEDOUT|429|rate/i.test(s);
+      if (!transient || attempt === tries - 1) throw e;
+      lastErr = e;
+      await new Promise(r => setTimeout(r, base * Math.pow(2, attempt)));
+      attempt++;
+    }
+  }
+  throw lastErr;
+}
+
+let _quoteLock = Promise.resolve();
+let _pendingQuoteArgs = null;
+
+function requestQuote(amtStr, fromSnap, toSnap) {
+  _pendingQuoteArgs = { amtStr, fromSnap, toSnap };
+  _quoteLock = _quoteLock.then(async () => {
+    const args = _pendingQuoteArgs;
+    _pendingQuoteArgs = null;
+    if (!args) return;
+    const { amtStr, fromSnap, toSnap } = args;
+    return withRetry(() => getQuote(amtStr, fromSnap, toSnap));
+  });
+  return _quoteLock;
+}
+
+// ---- Swap execution ----
+let _swapBusy = false;
+
+async function executeSwap() {
+  if (_swapBusy) return;
+  _swapBusy = true;
+
+  const swapBtn = $("swapBtn");
+  try {
+    if (!signer || !connectedAddress) {
+      toggleWallet();
+      return;
+    }
+
+    const amtStr = $("fromAmount").value;
+    if (!amtStr || parseFloat(amtStr) <= 0) {
+      alert("Please enter an amount");
+      return;
+    }
+    if (fromToken === toToken) {
+      alert("Select different tokens");
+      return;
+    }
+
+    swapBtn.innerHTML = `<span class="loading"></span> Getting quote...`;
+    swapBtn.disabled = true;
+
+    const fromSnap = fromToken, toSnap = toToken;
+    const quote = await withRetry(() => getQuote(amtStr, fromSnap, toSnap));
+    const fromData = tokens[fromSnap];
+    const amountIn = safeParseUnits(amtStr, fromData.decimals);
+
+    let txData = quote.multicall;
+
+    // ERC20 approval
+    if (fromData.address !== ZERO_ADDRESS) {
+      let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS);
+      if (allowance == null) {
+        const r = erc20Read(fromData.address);
+        swapBtn.textContent = "Checking allowance...";
+        allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
+        cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
+      }
+
+      if (allowance < amountIn) {
+        const permitCfg = PERMIT_CONFIG[fromData.address.toLowerCase()];
+        if (permitCfg) {
+          // --- PERMIT PATH (single tx) ---
+          swapBtn.textContent = "Sign permit...";
+          const permitData = await signPermit(permitCfg, fromData.address);
+          txData = buildPermitMulticall(quote.calls, permitData);
+        } else {
+          // --- APPROVE PATH (two tx, fallback for non-permit tokens) ---
+          swapBtn.textContent = "Approving token...";
+          const erc20W = new ethers.Contract(
+            fromData.address,
+            ["function approve(address,uint256) returns (bool)"],
+            signer
+          );
+          const approveTx = await wcTransaction(
+            erc20W.approve(ZROUTER_ADDRESS, ethers.MaxUint256),
+            'Approve token spending in your wallet'
+          );
+          swapBtn.innerHTML = `<a href="https://etherscan.io/tx/${approveTx.hash}" target="_blank" style="color:white;text-decoration:none">Approving... (view tx)</a>`;
+          const rc = await waitForTx(approveTx);
+          if (rc.status === 0) throw new Error("Approval transaction failed");
+          const fresh = await getQuote(amtStr, fromSnap, toSnap);
+          txData = fresh.multicall;
+          quote.msgValue = fresh.msgValue;
+          cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
+        }
+      }
+    }
+
+    swapBtn.textContent = "Swapping...";
+    const txValue = quote.msgValue ?? 0n;
+
+    const swapTx = await wcTransaction(
+      signer.sendTransaction({
+        to: ZROUTER_ADDRESS,
+        data: txData,
+        value: txValue,
+      }),
+      'Confirm swap in your wallet'
+    );
+    swapBtn.innerHTML = `<a href="https://etherscan.io/tx/${swapTx.hash}" target="_blank" style="color:white;text-decoration:none">Confirming swap... (view tx)</a>`;
+
+    const receipt = await waitForTx(swapTx);
+    if (receipt.status === 0) throw new Error("Swap transaction failed");
+
+    swapBtn.textContent = "Swap Complete!";
+    $("fromAmount").value = "";
+    $("toAmount").value = "";
+    $("quoteInfo").style.display = "none";
+    setTimeout(() => {
+      updateBalances();
+      swapBtn.textContent = "Enter an amount";
+      swapBtn.disabled = true;
+    }, 1500);
+  } catch (e) {
+    console.error("Swap error:", e);
+    let msg = "Swap failed";
+    const s = String(e?.message || e?.reason || "");
+    if (e.code === 4001 || /user rejected|denied/i.test(s)) msg = "Transaction cancelled";
+    else if (/insufficient funds/i.test(s)) msg = "Insufficient balance";
+    else if (/Too many decimals|Invalid number/i.test(s)) msg = s;
+
+    swapBtn.textContent = msg;
+    setTimeout(() => {
+      swapBtn.textContent = "Swap";
+      swapBtn.disabled = false;
+    }, 2000);
+  } finally {
+    _swapBusy = false;
+  }
+}
+
+// ---- Token swap direction ----
+function swapTokens() {
+  if (fromToken === toToken) return;
+  const prevFrom = fromToken, prevTo = toToken;
+  const fAmt = $("fromAmount").value;
+  const tAmt = $("toAmount").value;
+
+  fromToken = prevTo;
+  toToken = prevFrom;
+  $("fromAmount").value = tAmt;
+  $("toAmount").value = "";
+  updateTokenDisplay();
+  _quoteSeq++;
+  updateBalances();
+  if (tAmt) handleAmountChange();
+}
+
+function fitRouteText(route) {
+  const el = $("routeInfo");
+  el.textContent = route;
+  el.title = route;
+  el.removeAttribute("data-size");
+  const len = route.length;
+  if (len > 48) el.setAttribute("data-size", "xs");
+  else if (len > 32) el.setAttribute("data-size", "sm");
+}
+
+// ---- Token display ----
+function updateTokenDisplay() {
+  const fSym = fromToken, tSym = toToken;
+  setHTML("fromTokenIcon", iconForSymbol(fSym));
+  setText("fromTokenSymbol", tokens[fSym].symbol);
+  setHTML("toTokenIcon", iconForSymbol(tSym));
+  setText("toTokenSymbol", tokens[tSym].symbol);
+}
+
+// ---- Token modal ----
+function initTokenListClick() {
+  const list = $("tokenList");
+  if (!list || list.dataset.inited === "1") return;
+  list.dataset.inited = "1";
+  list.addEventListener("click", (e) => {
+    const row = e.target.closest(".token-list-item");
+    if (!row) return;
+    const symbol = row.getAttribute("data-symbol");
+    if (symbol) selectToken(symbol);
+  });
+}
+
+function openTokenModal(side) {
+  currentModal = side;
+  const modal = $("tokenModal");
+  const list = $("tokenList");
+  list.textContent = "";
+
+  const frag = document.createDocumentFragment();
+  for (const symbol of Object.keys(tokens)) {
+    const row = document.createElement("div");
+    row.className = "token-list-item";
+    row.setAttribute("data-symbol", symbol);
+    const iconSpan = document.createElement("span");
+    iconSpan.className = "token-icon";
+    iconSpan.innerHTML = iconForSymbol(symbol);
+    const nameSpan = document.createElement("span");
+    nameSpan.className = "token-symbol";
+    nameSpan.textContent = symbol;
+    row.append(iconSpan, nameSpan);
+    frag.appendChild(row);
+  }
+  list.appendChild(frag);
+  modal.classList.add('active');
+  document.body.classList.add('modal-open');
+}
+
+function closeTokenModal() {
+  $("tokenModal").classList.remove('active');
+  document.body.classList.remove('modal-open');
+  $("customTokenAddress").value = "";
+}
+
+const reQuoteDebounced = debounce(handleAmountChange, 600);
+
+function selectToken(symbol) {
+  if (currentModal === "from") {
+    if (symbol === toToken) toToken = fromToken;
+    fromToken = symbol;
+  } else {
+    if (symbol === fromToken) fromToken = toToken;
+    toToken = symbol;
+  }
+  updateTokenDisplay();
+  updateBalances();
+  closeTokenModal();
+  currentModal = null;
+  const amt = $("fromAmount");
+  if (amt) amt.focus();
+  if (amt && amt.value) reQuoteDebounced();
+}
+
+async function addCustomToken() {
+  let address = $("customTokenAddress").value.trim();
+  if (!ethers.isAddress(address)) { alert("Invalid address"); return; }
+  address = ethers.getAddress(address);
+  if (address === ZERO_ADDRESS) { alert("Zero address is not a valid ERC-20"); return; }
+
+  try {
+    const rpc = provider || new ethers.JsonRpcProvider("https://eth.llamarpc.com");
+    try {
+      const code = await rpc.getCode(address);
+      if (!code || code === "0x") { alert("That address has no contract code on Ethereum."); return; }
+    } catch (_) {}
+
+    const erc20 = new ethers.Contract(address, [
+      "function symbol() view returns (string)",
+      "function decimals() view returns (uint8)",
+    ], rpc);
+    const [rawSymbol, rawDecimals] = await Promise.all([erc20.symbol(), erc20.decimals()]);
+
+    const symbol = String(rawSymbol || "").trim().slice(0, 24) || "TKN";
+    const decimals = Math.max(0, Math.min(36, Number(rawDecimals)));
+
+    const existing = tokens[symbol];
+    if (existing && existing.address.toLowerCase() !== address.toLowerCase()) {
+      alert(`A different token with symbol ${symbol} is already listed.`);
+      return;
+    }
+
+    tokens[symbol] = { address, symbol, decimals };
+    saveCustomTokens();
+    selectToken(symbol);
+  } catch (e) {
+    console.error("Error adding token:", e);
+    alert("Failed to add token. Ensure it's a valid ERC-20 on Ethereum.");
+  }
+}
+
+// ---- Keyboard shortcuts ----
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeTokenModal();
+    closeWalletModal();
+  }
+});
+
+// ---- Init ----
+document.addEventListener("DOMContentLoaded", () => {
+  updateTokenDisplay();
+  initTokenListClick();
+  const fromEl = $("fromAmount");
+  if (fromEl) fromEl.addEventListener("input", debounce(handleAmountChange, 400));
+});
+
+// Swap button click
+$("swapBtn").addEventListener("click", executeSwap);
+
+// ---- Auto-reconnect ----
+window.addEventListener("load", async () => {
+  try {
+    const savedWallet = localStorage.getItem('zswap_wallet');
+    if (savedWallet) {
+      // Wait a moment for EIP-6963 providers to announce
+      await new Promise(r => setTimeout(r, 300));
+      window.dispatchEvent(new Event('eip6963:requestProvider'));
+      await new Promise(r => setTimeout(r, 200));
+      await connectWithWallet(savedWallet);
+    }
+  } catch (e) {
+    console.error("Auto-reconnect failed:", e);
+  }
+});
+
+</script>
+</body>
+</html>
