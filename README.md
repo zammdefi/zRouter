@@ -24,7 +24,7 @@ V1 deployed to Ethereum: [0x00000000008892d085e0611eb8C8BDc9FD856fD3](https://et
 
 V0 deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835) on Ethereum and Base.
 
-Router helper (`zQuoter`) deployed to [0x907DAE8d75369A21fFf57402Fe29Ef4e95523465](https://etherscan.io/address/0x907DAE8d75369A21fFf57402Fe29Ef4e95523465#code) on Ethereum.
+Router helper (`zQuoter`) deployed to [0x9f373A73ED229C9D133A189c095E2fFb7B77703E](https://etherscan.io/address/0x9f373A73ED229C9D133A189c095E2fFb7B77703E#code) on Ethereum.
 
 And [0x772E2810A471dB2CC7ADA0d37D6395476535889a](https://basescan.org/address/0x772E2810A471dB2CC7ADA0d37D6395476535889a#code) on Base.
 
