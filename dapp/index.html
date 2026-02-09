@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -73,7 +72,6 @@ button.secondary {
 }
 button.secondary:hover { background: #f5f5f5; }
 
-/* Wallet button - fixed top right */
 .wallet {
   position: fixed;
   top: max(20px, env(safe-area-inset-top, 0px));
@@ -86,7 +84,6 @@ button.secondary:hover { background: #f5f5f5; }
 .wallet button { margin: 0; padding: 8px 16px; text-transform: none; }
 
 
-/* Token selector buttons */
 .token-select {
   display: inline-flex;
   align-items: center;
@@ -252,6 +249,59 @@ button.secondary:hover { background: #f5f5f5; }
 .slip-num::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .slip-num[type="number"] { -moz-appearance: textfield; }
 
+/* Refresh button & countdown */
+.refresh-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  margin: 0;
+  color: #bbb;
+  transition: color 0.15s;
+  opacity: 0.7;
+}
+.refresh-btn:hover { color: #888; opacity: 1; }
+.refresh-btn svg { display: block; }
+.quote-countdown { color: #bbb; font-size: 11px; opacity: 0.7; }
+
+/* Price impact */
+.impact-warn { color: #e67e22; }
+.impact-danger { color: #e74c3c; font-weight: 600; }
+
+/* All routes collapsible */
+.routes-toggle {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+  user-select: none;
+  color: #666;
+  font-size: 12px;
+  margin-top: 6px;
+}
+.routes-toggle:hover { color: #000; }
+.routes-list {
+  margin-top: 4px;
+  font-size: 12px;
+  color: #444;
+}
+.routes-list-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+.routes-list-item .best-badge {
+  background: #000;
+  color: #fff;
+  font-size: 10px;
+  padding: 1px 5px;
+  margin-left: 6px;
+  letter-spacing: 0.03em;
+}
+
 /* Loading spinner */
 .loading {
   display: inline-block;
@@ -358,6 +408,48 @@ body.modal-open { overflow: hidden; }
 }
 .custom-token-input:focus { border-bottom-width: 2px; }
 
+/* Token search & .wei list UI */
+.token-search {
+  width: 100%;
+  padding: 8px 0;
+  border: none;
+  border-bottom: 1px solid #000;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+  background: transparent;
+}
+.token-search:focus { border-bottom-width: 2px; }
+.token-search-status {
+  font-size: 11px;
+  color: #999;
+  margin: 4px 0 8px;
+  min-height: 14px;
+}
+.token-search-status.error { color: #e74c3c; }
+.token-group-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #999;
+  padding: 8px 12px 4px;
+  border-top: 1px solid #eee;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.wei-list-remove {
+  background: none;
+  border: none;
+  color: #999;
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0 4px;
+  margin: 0;
+  line-height: 1;
+}
+.wei-list-remove:hover { color: #e74c3c; }
+
 /* Status */
 .status {
   font-size: 13px;
@@ -455,11 +547,40 @@ body.modal-open { overflow: hidden; }
     <span>Route:</span><span id="routeInfo">--</span>
   </div>
   <div class="quote-row">
+    <span>Impact:</span><span id="impactInfo">--</span>
+  </div>
+  <div class="quote-row">
     <span>Slippage:</span>
     <span class="slip-inline">
       <input id="slippagePct" class="slip-num" type="number" inputmode="decimal" min="0" max="20" step="0.1" value="0.5" aria-label="Slippage (%)">
       <span class="slip-unit">%</span>
     </span>
+  </div>
+  <div class="quote-row">
+    <span class="quote-countdown" id="quoteCountdown"></span>
+    <span>
+      <button class="refresh-btn" onclick="manualRefresh()" title="Refresh quote">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/></svg>
+      </button>
+    </span>
+  </div>
+  <div id="allRoutesWrap" style="display:none">
+    <div class="routes-toggle" onclick="toggleAllRoutes()">
+      <span class="chevron" id="routesChevron" style="font-size:9px">&#9654;</span>
+      <span>All routes</span>
+    </div>
+    <div id="allRoutesList" class="routes-list" style="display:none"></div>
+  </div>
+</div>
+
+<!-- Receiver (optional) -->
+<div style="margin-top:12px">
+  <div style="display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none" onclick="const w=document.getElementById('receiverWrap');const open=w.style.display!=='none';w.style.display=open?'none':'block';this.querySelector('.chevron').textContent=open?'\u25B6':'\u25BC'">
+    <span class="chevron" style="font-size:9px;color:#666">&#9654;</span>
+    <label style="margin:0;cursor:pointer;pointer-events:none">Receiver</label>
+  </div>
+  <div id="receiverWrap" style="display:none;margin-top:8px">
+    <input type="text" id="receiverAddress" placeholder="0x... (defaults to connected wallet)" style="font-size:14px;padding:10px 0">
   </div>
 </div>
 
@@ -487,7 +608,9 @@ body.modal-open { overflow: hidden; }
       <div class="modal-title">Select Token</div>
       <button class="modal-close" onclick="closeTokenModal()">&times;</button>
     </div>
-    <div id="tokenList"></div>
+    <input type="text" id="tokenSearchInput" class="token-search" placeholder="Search or enter name.wei" autocomplete="off">
+    <div id="weiListStatus" class="token-search-status"></div>
+    <div id="tokenList" style="max-height:280px;overflow-y:auto"></div>
     <input type="text" id="customTokenAddress" class="custom-token-input" placeholder="Enter token address">
     <button style="margin-top:12px;width:100%" onclick="addCustomToken()">Add Custom Token</button>
   </div>
@@ -495,7 +618,7 @@ body.modal-open { overflow: hidden; }
 
 <!-- Footer web ring -->
 <div class="site-footer">
-  <a href="./weiNS.html">Domains</a> · built by <a href="https://zamm.finance/dao" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg>zOrg</a> · <a href="https://zamm.finance" target="_blank" rel="noopener">zAMM</a>
+  <a href="https://wei.domains" target="_blank" rel="noopener">Domains</a> · built by <a href="https://zamm.finance/dao" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg>zOrg</a> · <a href="https://zamm.finance" target="_blank" rel="noopener">zAMM</a>
 </div>
 
 <script>
@@ -510,6 +633,9 @@ const WSTETH_ADDRESS = "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0";
 const RETH_ADDRESS = "0xae78736Cd615f374D3085123A210448E74Fc6393";
 const DAI_ADDRESS = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
+const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)"];
+const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
@@ -566,18 +692,15 @@ let wcDeepLink = null;
 
 const eip6963Providers = new Map();
 
-// ---- EIP-6963 listener ----
-if (typeof window !== 'undefined') {
-  window.addEventListener('eip6963:announceProvider', (event) => {
-    try {
-      const { info, provider } = event.detail || {};
-      if (info?.uuid && provider) {
-        eip6963Providers.set(info.uuid, { info, provider });
-      }
-    } catch (e) {}
-  });
-  window.dispatchEvent(new Event('eip6963:requestProvider'));
-}
+window.addEventListener('eip6963:announceProvider', (event) => {
+  try {
+    const { info, provider } = event.detail || {};
+    if (info?.uuid && provider) {
+      eip6963Providers.set(info.uuid, { info, provider });
+    }
+  } catch (e) {}
+});
+window.dispatchEvent(new Event('eip6963:requestProvider'));
 
 // ---- Wallet helpers ----
 function findProvider(checkFn) {
@@ -648,7 +771,7 @@ function detectWallets() {
   }
 
   // 5. WalletConnect
-  const wcModule = (typeof globalThis !== 'undefined' ? globalThis : window)['@walletconnect/ethereum-provider'];
+  const wcModule = globalThis['@walletconnect/ethereum-provider'];
   if (wcModule?.EthereumProvider) {
     detected.push({ key: 'walletconnect', name: 'WalletConnect', icon: '📱' });
   }
@@ -800,7 +923,7 @@ async function connectWithWallet(walletKey) {
     let walletProvider;
 
     if (walletKey === 'walletconnect') {
-      const wcModule = (typeof globalThis !== 'undefined' ? globalThis : window)['@walletconnect/ethereum-provider'];
+      const wcModule = globalThis['@walletconnect/ethereum-provider'];
       const WCProvider = wcModule?.EthereumProvider;
 
       if (!WCProvider?.init) throw new Error('WalletConnect not available');
@@ -963,6 +1086,12 @@ function updateWalletDisplay() {
   }
   $('walletBtn').textContent = connectedAddress.slice(0, 6) + '...' + connectedAddress.slice(-4);
   updateWcBanner();
+  // Resolve .wei name in background
+  quoteRPC.call(async (rpc) => {
+    const ns = new ethers.Contract(WEINS_ADDRESS, WEINS_ABI, rpc);
+    const name = await ns.reverseResolve(connectedAddress);
+    if (name && connectedAddress) $('walletBtn').textContent = name.toLowerCase();
+  }).catch(() => {});
 }
 
 function disconnectWallet() {
@@ -995,6 +1124,7 @@ function disconnectWallet() {
   setText('fromBalance', 'Balance: --');
   setText('toBalance', 'Balance: --');
   setShown('quoteInfo', false);
+  stopQuoteRefresh();
   $('toAmount').value = '';
   _erc20Read.clear();
   _erc20BalCache.clear();
@@ -1039,9 +1169,349 @@ try {
 function saveCustomTokens() {
   try {
     const builtIn = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS].map(a => a.toLowerCase()));
-    const custom = Object.values(tokens).filter(t => !builtIn.has(t.address.toLowerCase()));
+    const custom = Object.values(tokens).filter(t => !builtIn.has(t.address.toLowerCase()) && !weiListTokenSource.has(t.symbol));
     localStorage.setItem('zswap_custom_tokens', JSON.stringify(custom));
   } catch (_) {}
+}
+
+// ---- .wei token list state ----
+const weiLists = new Map();       // name → { tokens: [...], loadedAt }
+const weiListTokenSource = new Map(); // symbol → listName
+
+function saveWeiLists() {
+  try {
+    const obj = {};
+    for (const [name, data] of weiLists) obj[name] = data;
+    localStorage.setItem('zswap_wei_lists', JSON.stringify(obj));
+  } catch (_) {}
+}
+
+function loadWeiLists() {
+  try {
+    const raw = JSON.parse(localStorage.getItem('zswap_wei_lists') || '{}');
+    for (const [name, data] of Object.entries(raw)) {
+      if (data && Array.isArray(data.tokens)) {
+        weiLists.set(name, data);
+        mergeWeiListTokens(name, data.tokens);
+      }
+    }
+  } catch (_) {}
+}
+
+function validateTokenList(rawArray) {
+  if (!Array.isArray(rawArray)) return [];
+  const seen = new Set();
+  const result = [];
+  for (const entry of rawArray) {
+    if (!entry || typeof entry !== 'object') continue;
+    const { address, symbol, decimals } = entry;
+    if (!address || !symbol || decimals == null) continue;
+    if (!ethers.isAddress(address)) continue;
+    const checksummed = ethers.getAddress(address);
+    if (checksummed === ZERO_ADDRESS) continue;
+    const addrLower = checksummed.toLowerCase();
+    if (seen.has(addrLower)) continue;
+    const sym = String(symbol).trim();
+    if (!sym || sym.length > 24 || !/^[A-Za-z0-9.]+$/.test(sym)) continue;
+    const dec = Number(decimals);
+    if (!Number.isInteger(dec) || dec < 0 || dec > 36) continue;
+    seen.add(addrLower);
+    const item = { address: checksummed, symbol: sym, decimals: dec };
+    if (entry.icon && typeof entry.icon === 'string') {
+      const url = entry.icon.trim();
+      if (url.startsWith('https://') || url.startsWith('data:image/')) item.icon = url;
+    }
+    result.push(item);
+  }
+  return result;
+}
+
+function mergeWeiListTokens(listName, validated) {
+  const builtInAddrs = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS].map(a => a.toLowerCase()));
+  for (const t of validated) {
+    if (builtInAddrs.has(t.address.toLowerCase())) continue;
+    let sym = t.symbol;
+    // Handle symbol collision with different address
+    if (tokens[sym] && tokens[sym].address.toLowerCase() !== t.address.toLowerCase()) {
+      sym = sym + '.' + listName.replace(/\.wei$/, '');
+    }
+    if (!tokens[sym]) {
+      tokens[sym] = { address: t.address, symbol: sym, decimals: t.decimals };
+      if (t.icon) tokens[sym].icon = t.icon;
+    }
+    weiListTokenSource.set(sym, listName);
+  }
+}
+
+// ---- ENSIP-7 contenthash → IPFS CID decoder ----
+const BASE32_ALPHA = 'abcdefghijklmnopqrstuvwxyz234567';
+function bytesToBase32(bytes) {
+  let bits = 0, value = 0, out = '';
+  for (const b of bytes) {
+    value = (value << 8) | b;
+    bits += 8;
+    while (bits >= 5) { bits -= 5; out += BASE32_ALPHA[(value >> bits) & 31]; }
+  }
+  if (bits > 0) out += BASE32_ALPHA[(value << (5 - bits)) & 31];
+  return out;
+}
+
+function decodeContenthash(hex) {
+  try {
+    const bytes = ethers.getBytes(hex);
+    if (bytes.length < 3) return null;
+    let proto = 0, shift = 0, offset = 0;
+    for (; offset < bytes.length; offset++) {
+      proto |= (bytes[offset] & 0x7f) << shift;
+      shift += 7;
+      if (!(bytes[offset] & 0x80)) { offset++; break; }
+    }
+    if (proto !== 0xe3) return null; // IPFS only
+    const cidBytes = bytes.slice(offset);
+    if (cidBytes[0] === 0x01) return 'b' + bytesToBase32(cidBytes); // CIDv1
+    return null;
+  } catch { return null; }
+}
+
+async function fetchIPFS(cid) {
+  let lastErr;
+  for (const gw of IPFS_GATEWAYS) {
+    try {
+      const resp = await fetch(gw + cid);
+      if (!resp.ok) throw new Error(resp.status);
+      return await resp.text();
+    } catch (e) { lastErr = e; }
+  }
+  throw new Error('All IPFS gateways failed: ' + lastErr?.message);
+}
+
+let _weiResolveSeq = 0;
+
+async function resolveWeiList(nameInput) {
+  let name = nameInput.toLowerCase().trim();
+  if (name.endsWith('.wei')) name = name.slice(0, -4);
+  if (!name) return;
+  const fullName = name + '.wei';
+
+  if (weiLists.has(fullName)) {
+    setHTML('weiListStatus', escText(fullName) + ' already loaded');
+    return;
+  }
+
+  const seq = ++_weiResolveSeq;
+  const statusEl = $('weiListStatus');
+  statusEl.className = 'token-search-status';
+  statusEl.textContent = 'Loading ' + fullName + '...';
+
+  try {
+    // Read both contenthash and text record in parallel
+    const { ch, txt } = await quoteRPC.call(async (rpc) => {
+      const ns = new ethers.Contract(WEINS_ADDRESS, WEINS_ABI, rpc);
+      const tokenId = await ns.computeId(fullName);
+      const [ch, txt] = await Promise.all([
+        ns.contenthash(tokenId).catch(() => '0x'),
+        ns.text(tokenId, 'tokens').catch(() => ''),
+      ]);
+      return { ch, txt };
+    });
+
+    if (seq !== _weiResolveSeq) return;
+
+    let raw = null;
+
+    // Try contenthash first (IPFS)
+    if (ch && ch !== '0x' && ch.length > 2) {
+      const cid = decodeContenthash(ch);
+      if (cid) {
+        statusEl.textContent = 'Fetching from IPFS...';
+        raw = await fetchIPFS(cid);
+        if (seq !== _weiResolveSeq) return;
+      }
+    }
+
+    // Fall back to text record
+    if (!raw || !raw.trim()) {
+      raw = txt;
+    }
+
+    if (!raw || !raw.trim()) {
+      statusEl.className = 'token-search-status error';
+      statusEl.textContent = 'No token list found on ' + fullName;
+      return;
+    }
+
+    let parsed;
+    try { parsed = JSON.parse(raw); } catch (e) {
+      statusEl.className = 'token-search-status error';
+      statusEl.textContent = 'Invalid JSON from ' + fullName;
+      return;
+    }
+
+    const validated = validateTokenList(parsed);
+    if (validated.length === 0) {
+      statusEl.className = 'token-search-status error';
+      statusEl.textContent = 'No valid tokens in ' + fullName;
+      return;
+    }
+
+    weiLists.set(fullName, { tokens: validated, loadedAt: Date.now() });
+    mergeWeiListTokens(fullName, validated);
+    saveWeiLists();
+    statusEl.className = 'token-search-status';
+    statusEl.textContent = 'Loaded ' + validated.length + ' tokens from ' + fullName;
+
+    const filter = $('tokenSearchInput')?.value || '';
+    renderTokenList(filter);
+  } catch (e) {
+    if (seq !== _weiResolveSeq) return;
+    statusEl.className = 'token-search-status error';
+    statusEl.textContent = 'Failed to resolve ' + fullName;
+    console.error('.wei resolve error:', e);
+  }
+}
+
+function removeWeiList(listName) {
+  const entry = weiLists.get(listName);
+  if (!entry) return;
+  // Collect symbols to remove (avoid mutating map during iteration)
+  const toRemove = [];
+  for (const [sym, src] of weiListTokenSource) {
+    if (src !== listName) continue;
+    // Don't remove if currently selected
+    if (sym === fromToken || sym === toToken) continue;
+    toRemove.push(sym);
+  }
+  for (const sym of toRemove) {
+    delete tokens[sym];
+    weiListTokenSource.delete(sym);
+  }
+  weiLists.delete(listName);
+  saveWeiLists();
+}
+
+function renderTokenList(filter) {
+  const list = $('tokenList');
+  if (!list) return;
+  list.textContent = '';
+  const frag = document.createDocumentFragment();
+  const q = (filter || '').toLowerCase().trim();
+
+  const builtInAddrs = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS].map(a => a.toLowerCase()));
+
+  function matchesFilter(sym, addr) {
+    if (!q) return true;
+    return sym.toLowerCase().includes(q) || addr.toLowerCase().includes(q);
+  }
+
+  function makeRow(symbol) {
+    const row = document.createElement('div');
+    row.className = 'token-list-item';
+    row.setAttribute('data-symbol', symbol);
+    const iconSpan = document.createElement('span');
+    iconSpan.className = 'token-icon';
+    iconSpan.innerHTML = iconForSymbol(symbol);
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'token-symbol';
+    nameSpan.textContent = symbol;
+    row.append(iconSpan, nameSpan);
+    return row;
+  }
+
+  // Built-in tokens
+  let hasAny = false;
+  for (const sym of Object.keys(tokens)) {
+    if (!builtInAddrs.has(tokens[sym].address.toLowerCase())) continue;
+    if (!matchesFilter(sym, tokens[sym].address)) continue;
+    frag.appendChild(makeRow(sym));
+    hasAny = true;
+  }
+
+  // Per-.wei-list groups
+  for (const [listName] of weiLists) {
+    const listTokens = [];
+    for (const [sym, src] of weiListTokenSource) {
+      if (src !== listName) continue;
+      if (!tokens[sym]) continue;
+      if (!matchesFilter(sym, tokens[sym].address)) continue;
+      listTokens.push(sym);
+    }
+    if (listTokens.length === 0) continue;
+    const label = document.createElement('div');
+    label.className = 'token-group-label';
+    label.innerHTML = escText(listName) + ' <button class="wei-list-remove" data-list="' + escAttr(listName) + '" title="Remove list">&times;</button>';
+    frag.appendChild(label);
+    for (const sym of listTokens) frag.appendChild(makeRow(sym));
+    hasAny = true;
+  }
+
+  // Custom tokens (not built-in, not from .wei lists)
+  const customTokens = [];
+  for (const sym of Object.keys(tokens)) {
+    if (builtInAddrs.has(tokens[sym].address.toLowerCase())) continue;
+    if (weiListTokenSource.has(sym)) continue;
+    if (!matchesFilter(sym, tokens[sym].address)) continue;
+    customTokens.push(sym);
+  }
+  if (customTokens.length > 0) {
+    const label = document.createElement('div');
+    label.className = 'token-group-label';
+    label.textContent = 'Custom';
+    frag.appendChild(label);
+    for (const sym of customTokens) frag.appendChild(makeRow(sym));
+    hasAny = true;
+  }
+
+  if (!hasAny) {
+    const empty = document.createElement('div');
+    empty.style.cssText = 'padding:16px 12px;color:#999;font-size:13px;text-align:center';
+    empty.textContent = q ? 'No tokens match "' + q + '"' : 'No tokens';
+    frag.appendChild(empty);
+  }
+
+  // Suggestion for token-list.wei
+  if (!q && weiLists.size === 0) {
+    const suggest = document.createElement('div');
+    suggest.style.cssText = 'padding:6px 12px;font-size:11px;color:#999';
+    suggest.innerHTML = 'Try loading <span id="weiSuggestLink" style="color:#000;cursor:pointer;text-decoration:underline">token-list.wei</span>';
+    frag.appendChild(suggest);
+  }
+
+  list.appendChild(frag);
+}
+
+let _weiDebounceTimer = null;
+
+function initTokenSearch() {
+  const input = $('tokenSearchInput');
+  if (!input) return;
+
+  input.addEventListener('input', () => {
+    const val = input.value.trim();
+    renderTokenList(val);
+    clearTimeout(_weiDebounceTimer);
+    if (val.endsWith('.wei') && val.length > 4) {
+      _weiDebounceTimer = setTimeout(() => resolveWeiList(val), 800);
+    }
+  });
+
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') {
+      const val = input.value.trim();
+      if (val.endsWith('.wei') && val.length > 4) {
+        clearTimeout(_weiDebounceTimer);
+        resolveWeiList(val);
+      }
+    }
+  });
+
+  // Delegate click on suggestion link
+  $('tokenList').addEventListener('click', (e) => {
+    if (e.target.id === 'weiSuggestLink') {
+      input.value = 'token-list.wei';
+      renderTokenList('token-list.wei');
+      resolveWeiList('token-list.wei');
+    }
+  });
 }
 
 let fromToken = "ETH";
@@ -1069,6 +1539,8 @@ const _letterIconCache = new Map();
 function iconForSymbol(sym) {
   const s = String(sym);
   if (ICONS[s]) return ICONS[s];
+  const t = tokens[s];
+  if (t?.icon) return `<img src="${escAttr(t.icon)}" width="24" height="24" style="border-radius:50%" alt="${escAttr(s)}">`;
   if (_letterIconCache.has(s)) return _letterIconCache.get(s);
   const svg = makeLetterIcon(s);
   _letterIconCache.set(s, svg);
@@ -1271,6 +1743,16 @@ async function signPermit(config, tokenAddress) {
   return { v, r, s, nonce, deadline, config };
 }
 
+function decodeMulticallCalls(multicallData) {
+  try {
+    const iface = new ethers.Interface(['function multicall(bytes[]) payable returns (bytes[])']);
+    const decoded = iface.decodeFunctionData('multicall', multicallData);
+    return Array.from(decoded[0]);
+  } catch (e) {
+    return [];
+  }
+}
+
 function buildPermitMulticall(calls, permitData) {
   const iface = new ethers.Interface([
     'function ' + permitData.config.routerFn,
@@ -1338,7 +1820,7 @@ async function updateBalances() {
     }
     if (!toIsEth) {
       const keyT = t.address.toLowerCase();
-      if (!(!fromIsEth && keyT === f.address.toLowerCase())) {
+      if (fromIsEth || keyT !== f.address.toLowerCase()) {
         fetches.push((async () => {
           const c = erc20Reader(t.address);
           balances[keyT] = await c.balanceOf(connectedAddress);
@@ -1370,6 +1852,35 @@ const AMM_NAMES = {
   3: "Uniswap V3", 4: "Uniswap V4", 5: "Curve",
 };
 
+// ---- Quote refresh timer ----
+let _refreshTimer = null;
+let _refreshCountdown = 0;
+
+function startQuoteRefresh() {
+  stopQuoteRefresh();
+  _refreshCountdown = 15;
+  setText('quoteCountdown', `Refreshes in ${_refreshCountdown}s`);
+  _refreshTimer = setInterval(() => {
+    _refreshCountdown--;
+    if (_refreshCountdown <= 0) {
+      _refreshCountdown = 15;
+      handleAmountChange();
+    }
+    setText('quoteCountdown', `Refreshes in ${_refreshCountdown}s`);
+  }, 1000);
+}
+
+function stopQuoteRefresh() {
+  if (_refreshTimer) { clearInterval(_refreshTimer); _refreshTimer = null; }
+  _refreshCountdown = 0;
+  setText('quoteCountdown', '');
+}
+
+function manualRefresh() {
+  handleAmountChange();
+  // Timer restarted by handleAmountChange on success
+}
+
 // ---- Quoting ----
 let _quoteSeq = 0;
 
@@ -1383,6 +1894,7 @@ async function handleAmountChange() {
     setText(swapBtn, "Connect Wallet");
     setDisabled(swapBtn, false);
     setShown(quoteInfoEl, false);
+    stopQuoteRefresh();
     toAmountEl.value = "";
     return;
   }
@@ -1391,6 +1903,7 @@ async function handleAmountChange() {
   if (!amtStr || !Number.isFinite(amtNum) || amtNum <= 0) {
     toAmountEl.value = "";
     setShown(quoteInfoEl, false);
+    stopQuoteRefresh();
     setText(swapBtn, "Enter an amount");
     setDisabled(swapBtn, true);
     return;
@@ -1399,6 +1912,7 @@ async function handleAmountChange() {
   if (fromToken === toToken) {
     toAmountEl.value = "";
     setShown(quoteInfoEl, false);
+    stopQuoteRefresh();
     setText(swapBtn, "Select different tokens");
     setDisabled(swapBtn, true);
     return;
@@ -1421,11 +1935,22 @@ async function handleAmountChange() {
     const outStr = ethers.formatUnits(quote.expectedOutput, toData.decimals);
     if (toAmountEl.value !== outStr) toAmountEl.value = outStr;
 
-    const route = quote.isTwoHop
-      ? `${quote.sourceA} + ${quote.sourceB}`
-      : `${quote.sourceA}`;
+    // Route display
+    const route = quote.isSplit
+      ? formatSplitRoute(quote.splitLegs)
+      : quote.isTwoHop
+        ? `${quote.sourceA} + ${quote.sourceB}`
+        : `${quote.sourceA}`;
     fitRouteText(route);
+
+    // Price impact
+    displayPriceImpact(amtStr, fromSnap, toSnap, quote);
+
+    // All routes
+    displayAllRoutes(quote, toSnap);
+
     setShown(quoteInfoEl, true);
+    startQuoteRefresh();
 
     // Allowance check
     const fromData = tokens[fromSnap];
@@ -1473,7 +1998,6 @@ async function setMaxFromBalance() {
     if (f.address === ZERO_ADDRESS) {
       raw = await provider.getBalance(connectedAddress);
       raw = (raw * 95n) / 100n;
-      if (raw < 0n) raw = 0n;
     } else {
       const c = new ethers.Contract(
         f.address,
@@ -1544,40 +2068,220 @@ function initSimpleSlippage() {
 document.addEventListener("DOMContentLoaded", initSimpleSlippage);
 
 // ---- Quote via RPC ----
+function getReceiver() {
+  const v = ($("receiverAddress")?.value || "").trim();
+  if (v && ethers.isAddress(v)) return ethers.getAddress(v);
+  return connectedAddress;
+}
+
 async function getQuote(fromAmountStr, fromSym, toSym) {
   if (!connectedAddress) throw new Error("Connect wallet to get a quote");
   const fromData = tokens[fromSym], toData = tokens[toSym];
   if (!fromData || !toData) throw new Error("Unknown token");
   if (fromData.address === toData.address) throw new Error("Same token");
 
+  const receiver = getReceiver();
   const amountIn = safeParseUnits(fromAmountStr, fromData.decimals);
   readSlippage(true);
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
 
   const quoterAbi = [
     "function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)",
+    "function buildSplitSwap(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
+    "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
+    "function quoteCurve(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 maxCandidates) view returns (uint256 amountIn,uint256 amountOut,address bestPool,bool usedUnderlying,bool usedStable,uint8 iIndex,uint8 jIndex)",
   ];
+
   return await quoteRPC.call(async (rpc) => {
     const quoter = new ethers.Contract(ZQUOTER_ADDRESS, quoterAbi, rpc);
-    const r = await quoter.buildBestSwapViaETHMulticall(
-      connectedAddress, connectedAddress, false,
-      tokens[fromSym].address, tokens[toSym].address,
-      amountIn, BigInt(slippageBps),
-      BigInt(Math.trunc(Date.now() / 1000) + 300),
-      { blockTag: "latest" }
-    );
+    const callOpts = { blockTag: "latest" };
+
+    // Fire all 4 calls in parallel
+    const [bestResult, splitResult, quotesResult, curveResult] = await Promise.allSettled([
+      quoter.buildBestSwapViaETHMulticall(
+        receiver, connectedAddress, false,
+        fromData.address, toData.address,
+        amountIn, BigInt(slippageBps), deadline, callOpts
+      ),
+      quoter.buildSplitSwap(
+        receiver, fromData.address, toData.address,
+        amountIn, BigInt(slippageBps), deadline, callOpts
+      ),
+      quoter.getQuotes(false, fromData.address, toData.address, amountIn, callOpts),
+      quoter.quoteCurve(false, fromData.address, toData.address, amountIn, 8, callOpts),
+    ]);
+
+    // bestResult is required
+    if (bestResult.status === 'rejected') throw bestResult.reason;
+    const r = bestResult.value;
 
     const isTwoHop = r.b.amountOut > 0n;
-    const expectedOutput = isTwoHop ? r.b.amountOut : r.a.amountOut;
-    return {
-      expectedOutput,
+    const bestOutput = isTwoHop ? r.b.amountOut : r.a.amountOut;
+
+    let result = {
+      expectedOutput: bestOutput,
       multicall: r.multicall,
       calls: r.calls,
       msgValue: r.msgValue ?? 0n,
       isTwoHop,
+      isSplit: false,
+      splitLegs: null,
       sourceA: AMM_NAMES[r.a.source] || "Unknown",
-      sourceB: isTwoHop ? AMM_NAMES[r.b.source] || "Unknown" : null,
+      sourceB: isTwoHop ? (AMM_NAMES[r.b.source] || "Unknown") : null,
+      allQuotes: null,
     };
+
+    // Check if split beats best
+    if (splitResult.status === 'fulfilled') {
+      const s = splitResult.value;
+      const splitTotal = s.legs[0].amountOut + s.legs[1].amountOut;
+      if (splitTotal > bestOutput && s.legs[0].amountOut > 0n && s.legs[1].amountOut > 0n) {
+        result.expectedOutput = splitTotal;
+        result.multicall = s.multicall;
+        result.msgValue = s.msgValue ?? 0n;
+        result.isSplit = true;
+        result.isTwoHop = false;
+        result.splitLegs = [
+          { source: AMM_NAMES[s.legs[0].source] || "Unknown", amountIn: s.legs[0].amountIn, amountOut: s.legs[0].amountOut, feeBps: s.legs[0].feeBps },
+          { source: AMM_NAMES[s.legs[1].source] || "Unknown", amountIn: s.legs[1].amountIn, amountOut: s.legs[1].amountOut, feeBps: s.legs[1].feeBps },
+        ];
+        // calls not returned by buildSplitSwap; multicall is directly usable
+        result.calls = null;
+      }
+    }
+
+    // Attach all-quotes for display
+    if (quotesResult.status === 'fulfilled') {
+      const q = quotesResult.value;
+      result.allQuotes = q.quotes.map(qt => ({
+        source: AMM_NAMES[qt.source] || `AMM #${qt.source}`,
+        sourceId: Number(qt.source),
+        feeBps: qt.feeBps,
+        amountIn: qt.amountIn,
+        amountOut: qt.amountOut,
+      })).filter(qt => qt.amountOut > 0n);
+      // Merge Curve quote if available
+      if (curveResult.status === 'fulfilled') {
+        const c = curveResult.value;
+        if (c.amountOut > 0n) {
+          result.allQuotes.push({ source: "Curve", sourceId: 5, feeBps: 0n, amountIn: c.amountIn, amountOut: c.amountOut });
+        }
+      }
+    }
+
+    return result;
   });
+}
+
+// ---- Split route formatting ----
+function formatSplitRoute(legs) {
+  if (!legs || legs.length < 2) return "Split";
+  const total = legs[0].amountIn + legs[1].amountIn;
+  if (total === 0n) return `${legs[0].source} + ${legs[1].source}`;
+  const pct0 = Number(legs[0].amountIn * 100n / total);
+  const pct1 = 100 - pct0;
+  return `${pct0}% ${legs[0].source} + ${pct1}% ${legs[1].source}`;
+}
+
+// ---- All-routes toggle ----
+function toggleAllRoutes() {
+  const list = $('allRoutesList');
+  const chev = $('routesChevron');
+  const open = list.style.display !== 'none';
+  list.style.display = open ? 'none' : 'block';
+  chev.innerHTML = open ? '&#9654;' : '&#9660;';
+}
+
+function displayAllRoutes(quote, toSym) {
+  const wrap = $('allRoutesWrap');
+  const list = $('allRoutesList');
+  if (!quote.allQuotes || quote.allQuotes.length === 0) {
+    setShown(wrap, false);
+    return;
+  }
+  const toData = tokens[toSym];
+  const sorted = [...quote.allQuotes].sort((a, b) => (b.amountOut > a.amountOut ? 1 : b.amountOut < a.amountOut ? -1 : 0));
+  const bestAmt = sorted[0].amountOut;
+  list.innerHTML = sorted.map(q => {
+    const out = fmt(ethers.formatUnits(q.amountOut, toData.decimals));
+    const badge = q.amountOut === bestAmt ? '<span class="best-badge">best</span>' : '';
+    const fee = Number(q.feeBps);
+    const feeLabel = fee > 0 ? ` (${fee >= 100 ? (fee / 100) + '%' : fee + 'bp'})` : '';
+    return `<div class="routes-list-item"><span>${escText(q.source)}${escText(feeLabel)}</span><span>${out} ${escText(toData.symbol)}${badge}</span></div>`;
+  }).join('');
+  setShown(wrap, true);
+}
+
+// ---- Price impact via spot rate ----
+const _spotCache = new Map();
+const _spotTTL = 30_000;
+
+function _spotKey(tokenIn, tokenOut) {
+  return `${tokenIn.toLowerCase()}:${tokenOut.toLowerCase()}`;
+}
+
+async function getSpotRate(fromSym, toSym) {
+  const fromData = tokens[fromSym], toData = tokens[toSym];
+  const key = _spotKey(fromData.address, toData.address);
+  const cached = _spotCache.get(key);
+  if (cached && Date.now() - cached.t < _spotTTL) return cached.rate;
+
+  // Use a small reference amount: 10^(decimals-2) or at least 1 unit
+  const refExp = Math.max(0, fromData.decimals - 2);
+  const refAmount = 10n ** BigInt(refExp);
+
+  try {
+    const spotRate = await quoteRPC.call(async (rpc) => {
+      const quoter = new ethers.Contract(ZQUOTER_ADDRESS, [
+        "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
+      ], rpc);
+      const q = await quoter.getQuotes(false, fromData.address, toData.address, refAmount, { blockTag: "latest" });
+      if (q.best.amountOut === 0n || q.best.amountIn === 0n) return null;
+      // Rate = amountOut / amountIn (both as BigInt, compute as float)
+      return Number(q.best.amountOut) / Number(q.best.amountIn);
+    });
+    if (spotRate != null) {
+      _spotCache.set(key, { rate: spotRate, t: Date.now() });
+    }
+    return spotRate;
+  } catch (e) {
+    console.warn("Spot rate fetch failed:", e);
+    return null;
+  }
+}
+
+async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
+  const el = $('impactInfo');
+  if (!el) return;
+  const seq = _quoteSeq; // capture to detect staleness after await
+  try {
+    const fromData = tokens[fromSym], toData = tokens[toSym];
+    const amountIn = safeParseUnits(amtStr, fromData.decimals);
+    const executionRate = Number(quote.expectedOutput) / Number(amountIn);
+
+    const spotRate = await getSpotRate(fromSym, toSym);
+    if (seq !== _quoteSeq) return; // stale — newer quote already in flight
+    if (spotRate == null || spotRate === 0) {
+      el.textContent = '--';
+      el.className = '';
+      return;
+    }
+
+    const impact = (1 - executionRate / spotRate) * 100;
+    const displayImpact = Math.max(0, impact);
+    el.textContent = displayImpact < 0.01 ? '<0.01%' : displayImpact.toFixed(2) + '%';
+
+    if (displayImpact > 5) {
+      el.className = 'impact-danger';
+    } else if (displayImpact > 2) {
+      el.className = 'impact-warn';
+    } else {
+      el.className = '';
+    }
+  } catch (e) {
+    el.textContent = '--';
+    el.className = '';
+  }
 }
 
 async function withRetry(task, { tries = 3, base = 120 } = {}) {
@@ -1616,6 +2320,7 @@ let _swapBusy = false;
 async function executeSwap() {
   if (_swapBusy) return;
   _swapBusy = true;
+  stopQuoteRefresh();
 
   const swapBtn = $("swapBtn");
   try {
@@ -1631,6 +2336,11 @@ async function executeSwap() {
     }
     if (fromToken === toToken) {
       alert("Select different tokens");
+      return;
+    }
+    const receiverRaw = ($("receiverAddress")?.value || "").trim();
+    if (receiverRaw && !ethers.isAddress(receiverRaw)) {
+      alert("Invalid receiver address");
       return;
     }
 
@@ -1660,7 +2370,8 @@ async function executeSwap() {
           // --- PERMIT PATH (single tx) ---
           swapBtn.textContent = "Sign permit...";
           const permitData = await signPermit(permitCfg, fromData.address);
-          txData = buildPermitMulticall(quote.calls, permitData);
+          const innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
+          txData = buildPermitMulticall(innerCalls, permitData);
         } else {
           // --- APPROVE PATH (two tx, fallback for non-permit tokens) ---
           swapBtn.textContent = "Approving token...";
@@ -1673,7 +2384,7 @@ async function executeSwap() {
             erc20W.approve(ZROUTER_ADDRESS, ethers.MaxUint256),
             'Approve token spending in your wallet'
           );
-          swapBtn.innerHTML = `<a href="https://etherscan.io/tx/${approveTx.hash}" target="_blank" style="color:white;text-decoration:none">Approving... (view tx)</a>`;
+          swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${approveTx.hash}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
           const rc = await waitForTx(approveTx);
           if (rc.status === 0) throw new Error("Approval transaction failed");
           const fresh = await getQuote(amtStr, fromSnap, toSnap);
@@ -1695,7 +2406,7 @@ async function executeSwap() {
       }),
       'Confirm swap in your wallet'
     );
-    swapBtn.innerHTML = `<a href="https://etherscan.io/tx/${swapTx.hash}" target="_blank" style="color:white;text-decoration:none">Confirming swap... (view tx)</a>`;
+    swapBtn.innerHTML = `Confirming swap... <a href="https://etherscan.io/tx/${swapTx.hash}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
 
     const receipt = await waitForTx(swapTx);
     if (receipt.status === 0) throw new Error("Swap transaction failed");
@@ -1704,6 +2415,7 @@ async function executeSwap() {
     $("fromAmount").value = "";
     $("toAmount").value = "";
     $("quoteInfo").style.display = "none";
+    stopQuoteRefresh();
     setTimeout(() => {
       updateBalances();
       swapBtn.textContent = "Enter an amount";
@@ -1769,6 +2481,16 @@ function initTokenListClick() {
   if (!list || list.dataset.inited === "1") return;
   list.dataset.inited = "1";
   list.addEventListener("click", (e) => {
+    // Handle .wei list remove button
+    const removeBtn = e.target.closest('.wei-list-remove');
+    if (removeBtn) {
+      const listName = removeBtn.getAttribute('data-list');
+      if (listName) {
+        removeWeiList(listName);
+        renderTokenList($('tokenSearchInput')?.value || '');
+      }
+      return;
+    }
     const row = e.target.closest(".token-list-item");
     if (!row) return;
     const symbol = row.getAttribute("data-symbol");
@@ -1778,33 +2500,24 @@ function initTokenListClick() {
 
 function openTokenModal(side) {
   currentModal = side;
-  const modal = $("tokenModal");
-  const list = $("tokenList");
-  list.textContent = "";
-
-  const frag = document.createDocumentFragment();
-  for (const symbol of Object.keys(tokens)) {
-    const row = document.createElement("div");
-    row.className = "token-list-item";
-    row.setAttribute("data-symbol", symbol);
-    const iconSpan = document.createElement("span");
-    iconSpan.className = "token-icon";
-    iconSpan.innerHTML = iconForSymbol(symbol);
-    const nameSpan = document.createElement("span");
-    nameSpan.className = "token-symbol";
-    nameSpan.textContent = symbol;
-    row.append(iconSpan, nameSpan);
-    frag.appendChild(row);
-  }
-  list.appendChild(frag);
-  modal.classList.add('active');
+  const searchInput = $('tokenSearchInput');
+  if (searchInput) searchInput.value = '';
+  const statusEl = $('weiListStatus');
+  if (statusEl) { statusEl.textContent = ''; statusEl.className = 'token-search-status'; }
+  renderTokenList('');
+  $("tokenModal").classList.add('active');
   document.body.classList.add('modal-open');
+  if (searchInput) searchInput.focus();
 }
 
 function closeTokenModal() {
   $("tokenModal").classList.remove('active');
   document.body.classList.remove('modal-open');
   $("customTokenAddress").value = "";
+  const searchInput = $('tokenSearchInput');
+  if (searchInput) searchInput.value = '';
+  const statusEl = $('weiListStatus');
+  if (statusEl) { statusEl.textContent = ''; statusEl.className = 'token-search-status'; }
 }
 
 const reQuoteDebounced = debounce(handleAmountChange, 600);
@@ -1846,7 +2559,7 @@ async function addCustomToken() {
     const [rawSymbol, rawDecimals] = await Promise.all([erc20.symbol(), erc20.decimals()]);
 
     const symbol = String(rawSymbol || "").trim().slice(0, 24) || "TKN";
-    const decimals = Math.max(0, Math.min(36, Number(rawDecimals)));
+    const decimals = Math.max(0, Math.min(36, Number(rawDecimals))) || 18;
 
     const existing = tokens[symbol];
     if (existing && existing.address.toLowerCase() !== address.toLowerCase()) {
@@ -1873,8 +2586,10 @@ document.addEventListener("keydown", (e) => {
 
 // ---- Init ----
 document.addEventListener("DOMContentLoaded", () => {
+  loadWeiLists();
   updateTokenDisplay();
   initTokenListClick();
+  initTokenSearch();
   const fromEl = $("fromAmount");
   if (fromEl) fromEl.addEventListener("input", debounce(handleAmountChange, 400));
 });
