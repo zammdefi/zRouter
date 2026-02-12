@@ -427,10 +427,16 @@ contract zRouter {
         (amountIn, amountOut) = exactOut ? (swapResult, swapAmount) : (swapAmount, swapResult);
 
         if (exactOut && to != address(this)) {
-            uint256 refund = ethIn ? address(this).balance : balanceOf(tokenIn);
-            if (refund != 0) {
-                if (ethIn) _safeTransferETH(msg.sender, refund);
-                else safeTransfer(tokenIn, msg.sender, refund);
+            uint256 refund;
+            if (ethIn) {
+                refund = address(this).balance;
+                if (refund != 0) _safeTransferETH(msg.sender, refund);
+            } else if (idIn == 0) {
+                refund = balanceOf(tokenIn);
+                if (refund != 0) safeTransfer(tokenIn, msg.sender, refund);
+            } else {
+                refund = IERC6909(tokenIn).balanceOf(address(this), idIn);
+                if (refund != 0) IERC6909(tokenIn).transfer(msg.sender, idIn, refund);
             }
         } else {
             depositFor(tokenOut, idOut, amountOut, to); // marks output target
@@ -1238,14 +1244,17 @@ contract zRouter {
     }
 
     /// @notice Reveal and register a .wei name after commitment.
-    /// @dev User must first commit on NameNFT using `makeCommitment(label, routerAddress, secret)`.
+    /// @dev User must first commit on NameNFT using `makeCommitment(label, routerAddress, derivedSecret)`.
+    ///      The derived secret is `keccak256(abi.encode(innerSecret, to))`, binding the commitment
+    ///      to the intended recipient. This prevents mempool front-running of the reveal tx.
     ///      Chain with swap via multicall for atomic swap-to-reveal. Excess ETH stays in
     ///      router for sweep.
-    function revealName(string calldata label, bytes32 secret, address to)
+    function revealName(string calldata label, bytes32 innerSecret, address to)
         public
         payable
         returns (uint256 tokenId)
     {
+        bytes32 secret = keccak256(abi.encode(innerSecret, to));
         uint256 val = address(this).balance;
         _useTransientBalance(address(this), address(0), 0, val);
         tokenId = INameNFT(NAME_NFT).reveal{value: val}(label, secret);

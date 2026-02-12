@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -393,6 +394,7 @@ body.modal-open { overflow: hidden; }
   transition: background 0.2s;
 }
 .token-list-item:hover { background: #f0f0f0; }
+.token-balance { margin-left: auto; font-size: 12px; color: #888; font-variant-numeric: tabular-nums; }
 
 /* Custom token input */
 .custom-token-input {
@@ -494,16 +496,154 @@ body.modal-open { overflow: hidden; }
   .amount-input { font-size: 18px; }
   h1 { font-size: 12px; }
 }
+
+/* Info tooltip */
+.info-tip {
+  position: relative;
+  display: inline-flex;
+}
+.info-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1px solid #999;
+  font-size: 11px;
+  font-style: italic;
+  font-family: Georgia, serif;
+  color: #999;
+  cursor: help;
+  line-height: 1;
+}
+.info-icon:hover { border-color: #000; color: #000; }
+.info-tooltip {
+  display: none;
+  position: absolute;
+  top: 28px;
+  left: 0;
+  width: 280px;
+  padding: 14px 16px;
+  background: #fff;
+  border: 1px solid #ddd;
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.6;
+  letter-spacing: 0;
+  text-transform: none;
+  color: #333;
+  z-index: 200;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.info-tip:hover .info-tooltip { display: block; }
+body.dark .info-icon { border-color: #555; color: #555; }
+body.dark .info-icon:hover { border-color: #e8e8e0; color: #e8e8e0; }
+body.dark .info-tooltip { background: #111; border-color: #333; color: #aaa; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+
+/* Dark mode toggle */
+.dark-toggle {
+  position: fixed;
+  top: max(22px, env(safe-area-inset-top, 0px));
+  left: max(20px, env(safe-area-inset-left, 0px));
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 14px;
+  padding: 6px;
+  margin: 0;
+  opacity: 0.7;
+  transition: all 0.2s;
+  z-index: 100;
+  line-height: 1;
+  color: #000;
+  background: #eee;
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.dark-toggle:hover { opacity: 1; }
+
+/* Dark mode */
+body.dark {
+  background: #0a0a0a;
+  color: #e8e8e0;
+}
+body.dark label { color: #777; }
+body.dark input[type="number"],
+body.dark input[type="text"],
+body.dark .amount-input { border-bottom-color: #333; color: #e8e8e0; }
+body.dark input::placeholder { color: #444; }
+body.dark .token-select { background: #0a0a0a; border-color: #333; }
+body.dark .token-select:hover { background: #151515; }
+body.dark .token-symbol { color: #e8e8e0; }
+body.dark button { background: #e8e8e0; color: #0a0a0a; border-color: #e8e8e0; }
+body.dark button:hover { background: #ccc; }
+body.dark button:disabled { background: #333; border-color: #333; color: #666; }
+body.dark button.secondary { background: #0a0a0a; color: #e8e8e0; border-color: #333; }
+body.dark button.secondary:hover { background: #151515; }
+body.dark .max-btn { border-color: #333; background: #0a0a0a; color: #e8e8e0; }
+body.dark .max-btn:hover { background: #e8e8e0; color: #0a0a0a; }
+body.dark .arrow-btn { background: #0a0a0a; border-color: #333; }
+body.dark .arrow-btn:hover { background: #151515; }
+body.dark .arrow-btn svg { stroke: #e8e8e0; }
+body.dark .swap-btn { background: #e8e8e0; color: #0a0a0a; border-color: #e8e8e0; }
+body.dark .swap-btn:hover:not(:disabled) { background: #ccc; }
+body.dark .swap-btn:disabled { background: #222; border-color: #222; color: #555; }
+body.dark .quote-info { background: #111; }
+body.dark .quote-info, body.dark .quote-row { color: #ccc; }
+body.dark .slip-num { color: #e8e8e0; border-bottom-color: rgba(255,255,255,0.15); }
+body.dark .slip-num:hover { border-bottom-color: rgba(255,255,255,0.3); }
+body.dark .slip-num:focus { border-bottom-color: #e8e8e0; }
+body.dark .slip-unit { color: #777; }
+body.dark .balance { color: #666; }
+body.dark .routes-toggle { color: #666; }
+body.dark .routes-toggle:hover { color: #e8e8e0; }
+body.dark .routes-list { color: #999; }
+body.dark .routes-list-item .best-badge { background: #e8e8e0; color: #0a0a0a; }
+body.dark .loading { border-color: #444; border-top-color: #0a0a0a; }
+body.dark .modal-overlay { background: rgba(0,0,0,0.85); }
+body.dark .modal { background: #111; border-color: #333; }
+body.dark .modal-close { color: #e8e8e0; }
+body.dark .wallet-option { background: #111; border-color: #333; color: #e8e8e0; }
+body.dark .wallet-option:hover { background: #e8e8e0; color: #0a0a0a; }
+body.dark .token-list-item:hover { background: #1a1a1a; }
+body.dark .token-balance { color: #666; }
+body.dark .custom-token-input,
+body.dark .token-search { border-bottom-color: #333; color: #e8e8e0; }
+body.dark .token-search-status { color: #666; }
+body.dark .token-group-label { color: #555; border-top-color: #222; }
+body.dark .wei-list-remove { color: #555; }
+body.dark .wei-list-remove:hover { color: #e74c3c; }
+body.dark .status { background: #111; color: #ccc; }
+body.dark .status.error { background: #1a0000; }
+body.dark .status.success { background: #001a00; }
+body.dark .site-footer a { color: inherit; }
+body.dark a { color: #e8e8e0; }
+body.dark .refresh-btn { color: #555; }
+body.dark .refresh-btn:hover { color: #999; }
+body.dark .quote-countdown { color: #555; }
+body.dark .dark-toggle { color: #000; background: #e8e8e0; border-radius: 50%; opacity: 0.7; width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; }
+body.dark .dark-toggle:hover { opacity: 1; }
+
+@media (max-width: 700px) {
+  .dark-toggle { top: 18px; left: 16px; }
+}
 </style>
 </head>
 <body>
+
+<button class="dark-toggle" onclick="toggleDark()" title="Toggle dark mode">&#9789;</button>
 
 <!-- Wallet button (fixed top-right) -->
 <div class="wallet">
   <button id="walletBtn" onclick="toggleWallet()">connect</button>
 </div>
 
-<h1>Swap</h1>
+<h1 style="display:flex;align-items:center;gap:8px">Swap <span class="info-tip"><span class="info-icon">i</span><span class="info-tooltip">zRouter is a fully on-chain DEX aggregator. Routes are discovered and optimized by zQuoter directly on the blockchain — no off-chain APIs, no solvers, no servers.<br><br>Aggregates Uniswap V2/V3/V4, SushiSwap, Curve, zAMM, and Lido with atomic multi-hop execution, split routing, and per-leg slippage protection.<br><br>Zero protocol fees. No intermediaries. Your trade goes directly from your wallet to the liquidity pools.</span></span></h1>
 
 <!-- From token section -->
 <div class="section token-section">
@@ -618,10 +758,22 @@ body.modal-open { overflow: hidden; }
 
 <!-- Footer web ring -->
 <div class="site-footer">
-  <a href="https://wei.domains" target="_blank" rel="noopener">Domains</a> · built by <a href="https://zamm.finance/dao" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg>zOrg</a> · <a href="https://zamm.finance" target="_blank" rel="noopener">zAMM</a>
+  <a href="https://wei.domains" target="_blank" rel="noopener">Domains</a> · <a href="https://dao.wei.is" target="_blank" rel="noopener">DAO</a> · built by <a href="https://dao.wei.is" target="_blank" rel="noopener"><svg width="14" height="14" viewBox="0 0 16 16" xmlns="http://www.w3.org/2000/svg" style="vertical-align:middle;margin:0 2px;image-rendering:pixelated"><rect width="16" height="16" fill="#0a0a0a"/><rect x="3" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="5" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="10" y="2" width="1" height="1" fill="#e8e8e0"/><rect x="12" y="1" width="1" height="1" fill="#e8e8e0"/><rect x="4" y="4" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="5" width="10" height="1" fill="#e8e8e0"/><rect x="2" y="6" width="12" height="3" fill="#e8e8e0"/><rect x="3" y="9" width="10" height="1" fill="#e8e8e0"/><rect x="4" y="10" width="8" height="1" fill="#e8e8e0"/><rect x="3" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="10" y="6" width="3" height="2" fill="#0a0a0a"/><rect x="5" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="9" y="11" width="2" height="1" fill="#e8e8e0"/><rect x="2" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="7" y="12" width="2" height="1" fill="#e8e8e0"/><rect x="11" y="12" width="3" height="1" fill="#e8e8e0"/><rect x="1" y="13" width="2" height="1" fill="#e8e8e0"/><rect x="13" y="13" width="2" height="1" fill="#e8e8e0"/></svg>zOrg</a> · <a href="https://zamm.finance" target="_blank" rel="noopener">zAMM</a>
 </div>
 
 <script>
+// ---- Dark mode ----
+function toggleDark() {
+  const on = document.body.classList.toggle('dark');
+  document.querySelector('.dark-toggle').textContent = on ? '\u2600' : '\u263D';
+  localStorage.setItem('dark', on ? '1' : '0');
+}
+(function() {
+  const pref = localStorage.getItem('dark');
+  const dark = pref === '1' || (pref === null && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  if (dark) { document.body.classList.add('dark'); document.querySelector('.dark-toggle').textContent = '\u2600'; }
+})();
+
 // ---- Constants ----
 const CHAIN_ID = 1;
 const ZQUOTER_ADDRESS = "0x9f373A73ED229C9D133A189c095E2fFb7B77703E";
@@ -632,8 +784,13 @@ const WBTC_ADDRESS = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
 const WSTETH_ADDRESS = "0x7f39C581F595B53c5cb19bD0b3f8dA6c935E2Ca0";
 const RETH_ADDRESS = "0xae78736Cd615f374D3085123A210448E74Fc6393";
 const DAI_ADDRESS = "0x6B175474E89094C44Da98b954EedeAC495271d0F";
+const PNKSTR_ADDRESS = "0xc50673EDb3A7b94E8CAD8a7d4E0cD68864E33eDF";
+const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
+const V4_ROUTER_ADDRESS = "0x00000000000044a361Ae3cAc094c9D1b14Eece97";
+const PNKSTR_HOOK_ADDRESS = "0xfAaad5B731F52cDc9746F2414c823eca9B06E844";
+const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)"];
 const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
 
@@ -652,10 +809,13 @@ function setText(id, s) {
   if (!el) return;
   if (el.textContent !== s) el.textContent = s;
 }
+let _htmlCache = new WeakMap();
 function setHTML(id, s) {
   const el = typeof id === 'string' ? $(id) : id;
   if (!el) return;
-  if (el.innerHTML !== s) el.innerHTML = s;
+  if (_htmlCache.get(el) === s) return;
+  el.innerHTML = s;
+  _htmlCache.set(el, s);
 }
 function setShown(id, shown) {
   const el = typeof id === 'string' ? $(id) : id;
@@ -672,7 +832,7 @@ function escText(s) {
   return String(s).replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]));
 }
 function escAttr(s) {
-  return escText(s).replace(/"/g, '&quot;');
+  return escText(s).replace(/"/g, '&quot;').replace(/'/g, '&#39;');
 }
 function debounce(fn, wait) {
   let t;
@@ -729,12 +889,11 @@ function detectWallets() {
   for (const [uuid, { info, provider }] of eip6963Providers.entries()) {
     const name = info?.name || 'Unknown';
     if (!seenNames.has(name.toLowerCase())) {
-      const safeName = name.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
       const iconUrl = info.icon && (info.icon.startsWith('data:image/') || info.icon.startsWith('https://')) ? info.icon : null;
       const safeIconUrl = iconUrl ? iconUrl.replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])) : null;
       detected.push({
         key: `eip6963_${uuid}`,
-        name: safeName,
+        name: name,
         icon: safeIconUrl ? `<img src="${safeIconUrl}" style="width:1.5rem;height:1.5rem;border-radius:4px;">` : '🔌',
         getProvider: () => provider
       });
@@ -809,7 +968,7 @@ function renderWalletModal(wallets) {
       <div style="padding: 12px; border: 1px solid #000; margin-bottom: 12px;">
         <div style="font-weight: 600; margin-bottom: 6px;">Connected</div>
         ${showName ? `<div style="font-size: 16px; margin-bottom: 4px;">${escapeHtml(displayName)}</div>` : ''}
-        <div style="font-size: 12px; word-break: break-all; opacity: 0.6;">${connectedAddress}</div>
+        <div style="font-size: 12px; word-break: break-all; opacity: 0.6;">${escapeHtml(connectedAddress)}</div>
       </div>
       <div class="wallet-option disconnect" onclick="disconnectWallet()">
         <span class="wallet-option-name">Disconnect</span>
@@ -817,11 +976,14 @@ function renderWalletModal(wallets) {
     `;
   } else {
     container.innerHTML = wallets.length > 0 ? wallets.map(w => `
-      <div class="wallet-option" onclick='connectWithWallet(${JSON.stringify(w.key)})'>
+      <div class="wallet-option" data-wallet-key="${escAttr(w.key)}">
         <span class="wallet-option-icon">${w.icon}</span>
         <span class="wallet-option-name">${escapeHtml(w.name)}</span>
       </div>
     `).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
+    container.querySelectorAll('[data-wallet-key]').forEach(el => {
+      el.addEventListener('click', () => connectWithWallet(el.dataset.walletKey));
+    });
   }
 }
 
@@ -842,9 +1004,9 @@ async function wcTransaction(txPromise, message = 'Confirm in your wallet app') 
   notif.id = 'wcNotif';
   notif.innerHTML = `
     <div style="position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:16px;text-align:center;z-index:10000;font-size:14px;">
-      <div style="margin-bottom:8px;">📱 ${message}</div>
+      <div style="margin-bottom:8px;">📱 ${escapeHtml(message)}</div>
       <div style="font-size:12px;opacity:0.7;">Open your wallet app to approve the transaction</div>
-      ${wcDeepLink ? `<a href="${wcDeepLink}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#fff;color:#000;border-radius:4px;text-decoration:none;">Open Wallet</a>` : ''}
+      ${wcDeepLink && /^https?:\/\//i.test(wcDeepLink) ? `<a href="${escAttr(wcDeepLink)}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#fff;color:#000;border-radius:4px;text-decoration:none;">Open Wallet</a>` : ''}
     </div>
   `;
   document.body.appendChild(notif);
@@ -950,8 +1112,8 @@ async function connectWithWallet(walletKey) {
         try {
           const session = walletConnectProvider.session;
           const peerMeta = session?.peer?.metadata;
-          if (peerMeta?.redirect?.native) wcDeepLink = peerMeta.redirect.native;
-          else if (peerMeta?.redirect?.universal) wcDeepLink = peerMeta.redirect.universal;
+          if (peerMeta?.redirect?.native && /^https?:\/\//i.test(peerMeta.redirect.native)) wcDeepLink = peerMeta.redirect.native;
+          else if (peerMeta?.redirect?.universal && /^https?:\/\//i.test(peerMeta.redirect.universal)) wcDeepLink = peerMeta.redirect.universal;
         } catch (e) {}
       });
 
@@ -962,8 +1124,8 @@ async function connectWithWallet(walletKey) {
       try {
         const session = walletConnectProvider.session;
         const peerMeta = session?.peer?.metadata;
-        if (peerMeta?.redirect?.native) wcDeepLink = peerMeta.redirect.native;
-        else if (peerMeta?.redirect?.universal) wcDeepLink = peerMeta.redirect.universal;
+        if (peerMeta?.redirect?.native && /^https?:\/\//i.test(peerMeta.redirect.native)) wcDeepLink = peerMeta.redirect.native;
+        else if (peerMeta?.redirect?.universal && /^https?:\/\//i.test(peerMeta.redirect.universal)) wcDeepLink = peerMeta.redirect.universal;
       } catch (e) {}
     } else if (walletKey.startsWith('eip6963_')) {
       const uuid = walletKey.replace('eip6963_', '');
@@ -1039,9 +1201,10 @@ async function connectWithWallet(walletKey) {
       }
     } catch (e) {}
 
-    // Clear ERC20 reader caches (provider changed)
+    // Clear caches (provider changed)
     _erc20Read.clear();
-    _erc20BalCache.clear();
+    _balanceCache.clear();
+    _allowCache.clear();
 
     // Update swap UI
     setText('swapBtn', 'Enter an amount');
@@ -1127,7 +1290,8 @@ function disconnectWallet() {
   stopQuoteRefresh();
   $('toAmount').value = '';
   _erc20Read.clear();
-  _erc20BalCache.clear();
+  _balanceCache.clear();
+  _allowCache.clear();
 }
 
 function showStatus(msg, type) {
@@ -1154,6 +1318,7 @@ const tokens = {
   WBTC: { address: WBTC_ADDRESS, symbol: "WBTC", decimals: 8 },
   wstETH: { address: WSTETH_ADDRESS, symbol: "wstETH", decimals: 18 },
   rETH: { address: RETH_ADDRESS, symbol: "rETH", decimals: 18 },
+  PNKSTR: { address: PNKSTR_ADDRESS, symbol: "PNKSTR", decimals: 18 },
 };
 
 // Load custom tokens from localStorage
@@ -1168,7 +1333,7 @@ try {
 
 function saveCustomTokens() {
   try {
-    const builtIn = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS].map(a => a.toLowerCase()));
+    const builtIn = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS].map(a => a.toLowerCase()));
     const custom = Object.values(tokens).filter(t => !builtIn.has(t.address.toLowerCase()) && !weiListTokenSource.has(t.symbol));
     localStorage.setItem('zswap_custom_tokens', JSON.stringify(custom));
   } catch (_) {}
@@ -1227,7 +1392,7 @@ function validateTokenList(rawArray) {
 }
 
 function mergeWeiListTokens(listName, validated) {
-  const builtInAddrs = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS].map(a => a.toLowerCase()));
+  const builtInAddrs = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS].map(a => a.toLowerCase()));
   for (const t of validated) {
     if (builtInAddrs.has(t.address.toLowerCase())) continue;
     let sym = t.symbol;
@@ -1396,7 +1561,7 @@ function renderTokenList(filter) {
   const frag = document.createDocumentFragment();
   const q = (filter || '').toLowerCase().trim();
 
-  const builtInAddrs = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS].map(a => a.toLowerCase()));
+  const builtInAddrs = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS].map(a => a.toLowerCase()));
 
   function matchesFilter(sym, addr) {
     if (!q) return true;
@@ -1404,6 +1569,7 @@ function renderTokenList(filter) {
   }
 
   function makeRow(symbol) {
+    const t = tokens[symbol];
     const row = document.createElement('div');
     row.className = 'token-list-item';
     row.setAttribute('data-symbol', symbol);
@@ -1413,7 +1579,17 @@ function renderTokenList(filter) {
     const nameSpan = document.createElement('span');
     nameSpan.className = 'token-symbol';
     nameSpan.textContent = symbol;
-    row.append(iconSpan, nameSpan);
+    const balSpan = document.createElement('span');
+    balSpan.className = 'token-balance';
+    if (connectedAddress && t) {
+      const cached = getCachedBalance(t.address);
+      if (cached != null && cached > 0n) {
+        const formatted = t.address === ZERO_ADDRESS
+          ? ethers.formatEther(cached) : ethers.formatUnits(cached, t.decimals);
+        balSpan.textContent = fmt(formatted);
+      }
+    }
+    row.append(iconSpan, nameSpan, balSpan);
     return row;
   }
 
@@ -1472,7 +1648,7 @@ function renderTokenList(filter) {
   if (!q && weiLists.size === 0) {
     const suggest = document.createElement('div');
     suggest.style.cssText = 'padding:6px 12px;font-size:11px;color:#999';
-    suggest.innerHTML = 'Try loading <span id="weiSuggestLink" style="color:#000;cursor:pointer;text-decoration:underline">token-list.wei</span>';
+    suggest.innerHTML = 'Try loading <span id="weiSuggestLink" style="color:inherit;cursor:pointer;text-decoration:underline">token-list.wei</span>';
     frag.appendChild(suggest);
   }
 
@@ -1520,18 +1696,19 @@ let _balSeq = 0;
 let slippageBps = 50;
 
 // ---- Token Icons ----
-const ETH_ICON = `<svg fill="#000000" width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill-rule="evenodd"><path d="M16 32C7.163 32 0 24.837 0 16S7.163 0 16 0s16 7.163 16 16-7.163 16-16 16zm7.994-15.781L16.498 4 9 16.22l7.498 4.353 7.496-4.354zM24 17.616l-7.502 4.351L9 17.617l7.498 10.378L24 17.616z"/><g fill-rule="nonzero"><path fill-opacity=".298" d="M16.498 4v8.87l7.497 3.35zm0 17.968v6.027L24 17.616z"/><path fill-opacity=".801" d="M16.498 20.573l7.497-4.353-7.497-3.348z"/><path fill-opacity=".298" d="M9 16.22l7.498 4.353v-7.701z"/></g></g></svg>`;
+const ETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><polygon fill="#80D8FF" points="7.62,18.83 16.01,30.5 16.01,24.1"/><polygon fill="#42A5F5" points="16.01,30.5 24.38,18.78 16.01,24.1"/><polygon fill="#FFF176" points="16.01,1.5 7.62,16.23 16.01,12.3"/><polygon fill="#FF8A80" points="24.38,16.18 16.01,1.5 16.01,12.3"/><polygon fill="#C1AEE1" points="16.01,21.5 24.38,16.18 16.01,12.3"/><polygon fill="#55FB9B" points="16.01,12.3 7.62,16.23 16.01,21.5"/></svg>`;
 const USDC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#2775CA" cx="16" cy="16" r="16"/><g fill="#FFF"><path d="M20.022 18.124c0-2.124-1.28-2.852-3.84-3.156-1.828-.243-2.193-.728-2.193-1.578 0-.85.61-1.396 1.828-1.396 1.097 0 1.707.364 2.011 1.275a.458.458 0 00.427.303h.975a.416.416 0 00.427-.425v-.06a3.04 3.04 0 00-2.743-2.489V9.142c0-.243-.183-.425-.487-.486h-.915c-.243 0-.426.182-.487.486v1.396c-1.829.242-2.986 1.456-2.986 2.974 0 2.002 1.218 2.791 3.778 3.095 1.707.303 2.255.668 2.255 1.639 0 .97-.853 1.638-2.011 1.638-1.585 0-2.133-.667-2.316-1.578-.06-.242-.244-.364-.427-.364h-1.036a.416.416 0 00-.426.425v.06c.243 1.518 1.219 2.61 3.23 2.914v1.457c0 .242.183.425.487.485h.915c.243 0 .426-.182.487-.485V21.34c1.829-.303 3.047-1.578 3.047-3.217z"/><path d="M12.892 24.497c-4.754-1.7-7.192-6.98-5.424-11.653.914-2.55 2.925-4.491 5.424-5.402.244-.121.365-.303.365-.607v-.85c0-.242-.121-.424-.365-.485-.061 0-.183 0-.244.06a10.895 10.895 0 00-7.13 13.717c1.096 3.4 3.717 6.01 7.13 7.102.244.121.488 0 .548-.243.061-.06.061-.122.061-.243v-.85c0-.182-.182-.424-.365-.546zm6.46-18.936c-.244-.122-.488 0-.548.242-.061.061-.061.122-.061.243v.85c0 .243.182.485.365.607 4.754 1.7 7.192 6.98 5.424 11.653-.914 2.55-2.925 4.491-5.424 5.402-.244.121-.365.303-.365.607v.85c0 .242.121.424.365.485.061 0 .183 0 .244-.06a10.895 10.895 0 007.13-13.717c-1.096-3.46-3.778-6.07-7.13-7.162z"/></g></g></svg>`;
 const USDT_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#26A17B"/><path fill="#FFF" d="M17.922 17.383v-.002c-.11.008-.677.042-1.942.042-1.01 0-1.721-.03-1.971-.042v.003c-3.888-.171-6.79-.848-6.79-1.658 0-.809 2.902-1.486 6.79-1.66v2.644c.254.018.982.061 1.988.061 1.207 0 1.812-.05 1.925-.06v-2.643c3.88.173 6.775.85 6.775 1.658 0 .81-2.895 1.485-6.775 1.657m0-3.59v-2.366h5.414V7.819H8.595v3.608h5.414v2.365c-4.4.202-7.709 1.074-7.709 2.118 0 1.044 3.309 1.915 7.709 2.118v7.582h3.913v-7.584c4.393-.202 7.694-1.073 7.694-2.116 0-1.043-3.301-1.914-7.694-2.117"/></g></svg>`;
 const WBTC_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle cx="16" cy="16" r="16" fill="#F7931A"/><path fill="#FFF" fill-rule="nonzero" d="M23.189 14.02c.314-2.096-1.283-3.223-3.465-3.975l.708-2.84-1.728-.43-.69 2.765c-.454-.114-.92-.22-1.385-.326l.695-2.783L15.596 6l-.708 2.839c-.376-.086-.746-.17-1.104-.26l.002-.009-2.384-.595-.46 1.846s1.283.294 1.256.312c.7.175.826.638.805 1.006l-.806 3.235c.048.012.11.03.18.057l-.183-.045-1.13 4.532c-.086.212-.303.531-.793.41.018.025-1.256-.313-1.256-.313l-.858 1.978 2.25.561c.418.105.828.215 1.231.318l-.715 2.872 1.727.43.708-2.84c.472.127.93.245 1.378.357l-.706 2.828 1.728.43.715-2.866c2.948.558 5.164.333 6.097-2.333.752-2.146-.037-3.385-1.588-4.192 1.13-.26 1.98-1.003 2.207-2.538zm-3.95 5.538c-.533 2.147-4.148.986-5.32.695l.95-3.805c1.172.293 4.929.872 4.37 3.11zm.535-5.569c-.487 1.953-3.495.96-4.47.717l.86-3.45c.975.243 4.118.696 3.61 2.733z"/></g></svg>`;
 const WSTETH_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none"><circle fill="#00A3FF" cx="16" cy="16" r="16"/><path d="M9.437 14.864l-.181.275c-2.048 3.097-1.603 7.253 1.034 9.824 1.561 1.521 3.622 2.353 5.683 2.353 0 0 0 0-6.536-12.452z" fill="#FFF"/><path opacity=".6" d="M15.997 18.611l-6.56-3.747c6.56 12.452 6.56 12.452 6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".6" d="M22.563 14.864l.181.275c2.048 3.097 1.603 7.253-1.034 9.824-1.561 1.521-3.622 2.353-5.683 2.353 0 0 0 0 6.536-12.452z" fill="#FFF"/><path opacity=".2" d="M16.003 18.611l6.56-3.747c-6.56 12.452-6.56 12.452-6.56 12.452 0-2.683 0-5.623 0-8.705z" fill="#FFF"/><path opacity=".2" d="M16.004 10.239v6.459l5.654-3.23-5.654-3.229z" fill="#FFF"/><path opacity=".6" d="M16.005 10.239l-5.655 3.229 5.655 3.23v-6.46z" fill="#FFF"/><path d="M16.005 4.805l-5.655 8.668 5.655-3.233V4.805z" fill="#FFF"/><path opacity=".6" d="M16.004 10.238l5.658 3.23-5.658-8.674v5.444z" fill="#FFF"/></g></svg>`;
 const RETH_ICON = `<svg viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="bgGradient" x1="0%" y1="0%" x2="0%" y2="100%"><stop offset="0%" style="stop-color:#FFAA6B;stop-opacity:1"/><stop offset="100%" style="stop-color:#FF8A5B;stop-opacity:1"/></linearGradient></defs><circle cx="100" cy="100" r="95" fill="#FFC93D"/><circle cx="100" cy="100" r="88" fill="#FF6B6B"/><circle cx="100" cy="100" r="82" fill="url(#bgGradient)"/><g transform="translate(100, 100) rotate(45)"><path d="M -8 -25 C -8 -30, -5 -35, 0 -35 C 5 -35, 8 -30, 8 -25 L 8 -5 L 18 5 L 18 15 L 8 10 L 8 20 L 0 25 L -8 20 L -8 10 L -18 15 L -18 5 L -8 -5 Z" fill="white"/><circle cx="0" cy="-20" r="4" fill="#FF8A5B"/><path d="M -6 20 L -9 35 L -3 30 L 0 38 L 3 30 L 9 35 L 6 20 Z" fill="white"/></g></svg>`;
 const DAI_ICON = `<svg width="24" height="24" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd"><circle fill="#F4B731" fill-rule="nonzero" cx="16" cy="16" r="16"/><path d="M9.277 8h6.552c3.985 0 7.006 2.116 8.13 5.194H26v1.861h-1.611c.031.294.047.594.047.898v.046c0 .342-.02.68-.06 1.01H26v1.86h-2.08C22.767 21.905 19.77 24 15.83 24H9.277v-5.131H7v-1.86h2.277v-1.954H7v-1.86h2.277V8zm1.831 10.869v3.462h4.72c2.914 0 5.078-1.387 6.085-3.462H11.108zm11.366-1.86H11.108v-1.954h11.37c.041.307.063.622.063.944v.045c0 .329-.023.65-.067.964zM15.83 9.665c2.926 0 5.097 1.424 6.098 3.528h-10.82V9.666h4.72z" fill="#FFF"/></g></svg>`;
-const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="#000" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="#000" font-size="12" font-weight="bold">?</text></svg>`;
+const PNKSTR_ICON = `<svg width="24" height="24" viewBox="0 0 296 296" xmlns="http://www.w3.org/2000/svg" shape-rendering="geometricPrecision" text-rendering="geometricPrecision"><style>#em3zDC0HIkr3{animation:em3zDC0HIkr3__rd 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr3__rd{0%{rx:93.77px;ry:93.77px}3.125%{rx:93.77px;ry:93.77px}18.75%{rx:93.77px;ry:93.77px}34.375%{rx:93.77px;ry:93.77px}56.25%{rx:0px;ry:0px}93.75%{rx:0px;ry:0px}100%{rx:0px;ry:0px}}#em3zDC0HIkr3_to{animation:em3zDC0HIkr3_to__to 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr3_to__to{0%{transform:translate(180.943141px,95.15235px)}3.125%{transform:translate(180.943141px,95.15235px)}18.75%{transform:translate(180.122px,95.152354px)}34.375%{transform:translate(148.075px,148.655006px)}56.25%{transform:translate(148.5px,148.655005px)}71.875%{transform:translate(180.122px,120.865004px)}84.375%{transform:translate(180.122px,95.152352px)}93.75%{transform:translate(180.122px,95.152351px)}100%{transform:translate(180.122px,95.152351px)}}#em3zDC0HIkr3_tr{animation:em3zDC0HIkr3_tr__tr 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr3_tr__tr{0%{transform:rotate(0deg)}34.375%{transform:rotate(0deg)}42.5%{transform:rotate(90deg)}100%{transform:rotate(90deg)}}#em3zDC0HIkr3_ts{animation:em3zDC0HIkr3_ts__ts 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr3_ts__ts{0%{transform:scale(0,0)}3.125%{transform:scale(0,0)}18.75%{transform:scale(0.8,0.8)}34.375%{transform:scale(1.319281,1.320365)}56.25%{transform:scale(1,1)}71.875%{transform:scale(0.697529,0.658712)}93.75%{transform:scale(0,0)}100%{transform:scale(0,0)}}#em3zDC0HIkr12_tr{animation:em3zDC0HIkr12_tr__tr 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr12_tr__tr{0%{transform:translate(135.33781px,207.03926px) rotate(720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}24.0625%{transform:translate(135.33781px,207.03926px) rotate(0deg);animation-timing-function:step-end}31.25%{transform:translate(135.33781px,207.03926px) rotate(720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}55.3125%{transform:translate(135.33781px,207.03926px) rotate(0deg);animation-timing-function:step-end}62.5%{transform:translate(135.33781px,207.03926px) rotate(720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}86.5625%{transform:translate(135.33781px,207.03926px) rotate(0deg);animation-timing-function:step-end}93.75%{transform:translate(135.33781px,207.03926px) rotate(720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}100%{transform:translate(135.33781px,207.03926px) rotate(532.987013deg)}}#em3zDC0HIkr12{animation:em3zDC0HIkr12_f_p 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr12_f_p{0%{fill:#d2dbed}24.0625%{fill:#d2dbec}31.25%{fill:#d2dbed}55.3125%{fill:#d2dbec}62.5%{fill:#d2dbed}86.5625%{fill:#d2dbec}93.75%{fill:#d2dbed}100%{fill:#d2dbed}}#em3zDC0HIkr13_tr{animation:em3zDC0HIkr13_tr__tr 32000ms linear infinite normal forwards}@keyframes em3zDC0HIkr13_tr__tr{0%{transform:translate(11.12px,29.9px) rotate(-720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}24.0625%{transform:translate(11.12px,29.9px) rotate(0deg);animation-timing-function:step-end}31.25%{transform:translate(11.12px,29.9px) rotate(-720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}55.3125%{transform:translate(11.12px,29.9px) rotate(0deg);animation-timing-function:step-end}62.5%{transform:translate(11.12px,29.9px) rotate(-720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}86.5625%{transform:translate(11.12px,29.9px) rotate(0deg);animation-timing-function:step-end}93.75%{transform:translate(11.12px,29.9px) rotate(-720deg);animation-timing-function:cubic-bezier(0.415,0.08,0.115,0.955)}100%{transform:translate(11.12px,29.9px) rotate(-532.987013deg)}}</style><circle r="148" transform="translate(148 148)" fill="#0d0d0d"/><g id="em3zDC0HIkr3_to" transform="translate(180.943141,95.15235)"><g id="em3zDC0HIkr3_tr" transform="rotate(0)"><g id="em3zDC0HIkr3_ts" transform="scale(0,0)"><rect id="em3zDC0HIkr3" width="187.538" height="187.538" rx="93.77" ry="93.77" transform="translate(-93.769,-93.769005)" fill="#f2f2f2"/></g></g></g><g style="mix-blend-mode:difference"><path d="M141.692,120.865v-43.1014h11.213v43.1014h-11.213ZM125.299,78.8923v-9.4526h43.857v9.4526h-43.857Zm53.228,41.9727L164.05,69.4397h11.425l9.51,39.2913h-.923l10.007-39.2913h10.716l9.864,39.2913h-.852l9.581-39.2913h11.567L220.184,120.865h-12.135l-9.084-36.0472h.994l-9.155,36.0472h-12.277Z" fill="#fff"/></g></svg>`;
+const DEFAULT_ICON = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="2"/><text x="12" y="16" text-anchor="middle" fill="currentColor" font-size="12" font-weight="bold">?</text></svg>`;
 
 const ICONS = {
   ETH: ETH_ICON, USDC: USDC_ICON, USDT: USDT_ICON, WBTC: WBTC_ICON,
-  wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON,
+  wstETH: WSTETH_ICON, rETH: RETH_ICON, DAI: DAI_ICON, PNKSTR: PNKSTR_ICON,
 };
 
 // ---- Icon generation for custom tokens ----
@@ -1590,7 +1767,7 @@ function makeFallbackProvider(urls) {
   const network = { chainId: CHAIN_ID, name: "mainnet" };
   const nodes = urls.map(u => ({
     url: u,
-    p: new ethers.JsonRpcProvider(u, network),
+    p: new ethers.JsonRpcProvider(u, network, { batchMaxCount: 10 }),
     downUntil: 0,
     warmed: false,
     ok: true,
@@ -1678,6 +1855,79 @@ function cacheGetAllowance(token, owner, spender) {
   return hit && Date.now() - hit.t < _allowTTLms ? hit.v : null;
 }
 
+// ---- Multicall3 batched reads ----
+const MULTICALL3_IFACE = new ethers.Interface([
+  "function aggregate3(tuple(address target, bool allowFailure, bytes callData)[] calls) view returns (tuple(bool success, bytes returnData)[])",
+  "function getEthBalance(address addr) view returns (uint256 balance)",
+]);
+const MC_BAL_IFACE = new ethers.Interface([
+  "function balanceOf(address) view returns (uint256)",
+  "function allowance(address,address) view returns (uint256)",
+]);
+const _balanceCache = new Map(); // key → { v: bigint, t: number }
+const _BAL_TTL = 15_000;
+
+function getCachedBalance(tokenAddress) {
+  const key = tokenAddress === ZERO_ADDRESS ? 'ETH' : tokenAddress.toLowerCase();
+  const hit = _balanceCache.get(key);
+  return (hit && Date.now() - hit.t < _BAL_TTL) ? hit.v : null;
+}
+function setCachedBalance(tokenAddress, value) {
+  const key = tokenAddress === ZERO_ADDRESS ? 'ETH' : tokenAddress.toLowerCase();
+  _balanceCache.set(key, { v: value, t: Date.now() });
+}
+
+async function multicallRead(calls) {
+  if (calls.length === 0) return [];
+  const calldata = MULTICALL3_IFACE.encodeFunctionData("aggregate3", [
+    calls.map(c => [c.target, c.allowFailure, c.callData])
+  ]);
+  const rpc = provider || await quoteRPC.call(r => r);
+  const raw = await rpc.call({ to: MULTICALL3_ADDRESS, data: calldata });
+  return MULTICALL3_IFACE.decodeFunctionResult("aggregate3", raw)[0];
+}
+
+async function fetchModalBalances() {
+  if (!connectedAddress) return;
+  const allTokens = Object.values(tokens);
+  const calls = [];
+  const meta = [];
+  const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [connectedAddress]);
+
+  // ETH balance
+  calls.push({ target: MULTICALL3_ADDRESS, allowFailure: true,
+    callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [connectedAddress]) });
+  meta.push({ type: 'eth' });
+
+  // All ERC-20 balances
+  for (const t of allTokens) {
+    if (t.address === ZERO_ADDRESS) continue;
+    calls.push({ target: t.address, allowFailure: true, callData: balOfData });
+    meta.push({ type: 'erc20', address: t.address });
+  }
+
+  try {
+    const results = await multicallRead(calls);
+    for (let i = 0; i < meta.length; i++) {
+      const m = meta[i];
+      const r = results[i];
+      if (!r || !r.success) continue;
+      try {
+        if (m.type === 'eth') {
+          setCachedBalance(ZERO_ADDRESS, MULTICALL3_IFACE.decodeFunctionResult("getEthBalance", r.returnData)[0]);
+        } else {
+          setCachedBalance(m.address, MC_BAL_IFACE.decodeFunctionResult("balanceOf", r.returnData)[0]);
+        }
+      } catch {}
+    }
+    // Re-render to show fetched balances
+    const filter = $('tokenSearchInput')?.value || '';
+    renderTokenList(filter);
+  } catch (e) {
+    console.warn("Multicall3 modal balances failed:", e);
+  }
+}
+
 function safeParseUnits(valStr, decimals) {
   const s = String(valStr).trim();
   if (!s) throw new Error("Empty amount");
@@ -1702,16 +1952,91 @@ const PERMIT_CONFIG = {
   },
 };
 
+// ---- Generic EIP-2612 permit detection ----
+const _permitCache = new Map(); // address → config | null
+
+const _permitIface = new ethers.Interface([
+  'function eip712Domain() view returns (bytes1 fields, string name, string version, uint256 chainId, address verifyingContract, bytes32 salt, uint256[] extensions)',
+  'function nonces(address) view returns (uint256)',
+  'function DOMAIN_SEPARATOR() view returns (bytes32)',
+  'function name() view returns (string)',
+  'function permit(address owner, address spender, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+]);
+
+async function _staticCall(tokenAddress, data) {
+  return await quoteRPC.call(rpc => rpc.call({ to: tokenAddress, data }));
+}
+
+async function detectPermitConfig(tokenAddress) {
+  const key = tokenAddress.toLowerCase();
+  if (PERMIT_CONFIG[key]) return PERMIT_CONFIG[key];
+  if (_permitCache.has(key)) return _permitCache.get(key);
+
+  try {
+    // Quick check: does it have nonces() and DOMAIN_SEPARATOR()?
+    const [nonceRes, dsRes] = await Promise.all([
+      _staticCall(tokenAddress, _permitIface.encodeFunctionData('nonces', [ZERO_ADDRESS])),
+      _staticCall(tokenAddress, _permitIface.encodeFunctionData('DOMAIN_SEPARATOR')),
+    ]);
+    // If either reverts, quoteRPC throws or returns 0x
+    if (!nonceRes || nonceRes === '0x' || !dsRes || dsRes === '0x') throw new Error('no permit');
+
+    // Try EIP-5267 eip712Domain() first
+    let domainName, domainVersion;
+    try {
+      const domRes = await _staticCall(tokenAddress, _permitIface.encodeFunctionData('eip712Domain'));
+      const decoded = _permitIface.decodeFunctionResult('eip712Domain', domRes);
+      domainName = decoded[1];
+      domainVersion = decoded[2];
+    } catch (_) {
+      // Fallback: read name() and try version "1"
+      const nameRes = await _staticCall(tokenAddress, _permitIface.encodeFunctionData('name'));
+      domainName = _permitIface.decodeFunctionResult('name', nameRes)[0];
+      domainVersion = '1';
+    }
+
+    // Verify by computing the expected DOMAIN_SEPARATOR
+    const candidateDomain = { name: domainName, version: domainVersion, chainId: CHAIN_ID, verifyingContract: tokenAddress };
+    const computed = ethers.TypedDataEncoder.hashDomain(candidateDomain);
+    const onchain = ethers.AbiCoder.defaultAbiCoder().decode(['bytes32'], dsRes)[0];
+    if (computed !== onchain) {
+      // Try version "2" as fallback
+      candidateDomain.version = '2';
+      const computed2 = ethers.TypedDataEncoder.hashDomain(candidateDomain);
+      if (computed2 !== onchain) {
+        _permitCache.set(key, null);
+        return null;
+      }
+    }
+
+    const config = {
+      type: 'eip2612',
+      domain: candidateDomain,
+      routerFn: 'permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)',
+    };
+    _permitCache.set(key, config);
+    return config;
+  } catch (_) {
+    _permitCache.set(key, null);
+    return null;
+  }
+}
+
+async function getPermitConfig(tokenAddress) {
+  const key = tokenAddress.toLowerCase();
+  if (PERMIT_CONFIG[key]) return PERMIT_CONFIG[key];
+  return await detectPermitConfig(tokenAddress);
+}
+
 async function signPermit(config, tokenAddress) {
   const deadline = BigInt(Math.trunc(Date.now() / 1000) + 3600);
   const owner = connectedAddress;
   const spender = ZROUTER_ADDRESS;
 
   // Fetch nonce from token contract
-  const nonceIface = new ethers.Interface(['function nonces(address) view returns (uint256)']);
-  const nonceData = nonceIface.encodeFunctionData('nonces', [owner]);
+  const nonceData = _permitIface.encodeFunctionData('nonces', [owner]);
   const nonceResult = await quoteRPC.call(rpc => rpc.call({ to: tokenAddress, data: nonceData }));
-  const nonce = nonceIface.decodeFunctionResult('nonces', nonceResult)[0];
+  const nonce = _permitIface.decodeFunctionResult('nonces', nonceResult)[0];
 
   let types, values;
   if (config.type === 'dai') {
@@ -1745,8 +2070,7 @@ async function signPermit(config, tokenAddress) {
 
 function decodeMulticallCalls(multicallData) {
   try {
-    const iface = new ethers.Interface(['function multicall(bytes[]) payable returns (bytes[])']);
-    const decoded = iface.decodeFunctionData('multicall', multicallData);
+    const decoded = ROUTER_IFACE.decodeFunctionData('multicall', multicallData);
     return Array.from(decoded[0]);
   } catch (e) {
     return [];
@@ -1754,17 +2078,55 @@ function decodeMulticallCalls(multicallData) {
 }
 
 function buildPermitMulticall(calls, permitData) {
-  const iface = new ethers.Interface([
-    'function ' + permitData.config.routerFn,
-    'function multicall(bytes[]) payable returns (bytes[])',
-  ]);
   let permitCall;
   if (permitData.config.type === 'dai') {
-    permitCall = iface.encodeFunctionData('permitDAI', [permitData.nonce, permitData.deadline, permitData.v, permitData.r, permitData.s]);
+    permitCall = ROUTER_IFACE.encodeFunctionData('permitDAI', [permitData.nonce, permitData.deadline, permitData.v, permitData.r, permitData.s]);
   } else {
-    permitCall = iface.encodeFunctionData('permit', [permitData.config.domain.verifyingContract, ethers.MaxUint256, permitData.deadline, permitData.v, permitData.r, permitData.s]);
+    permitCall = ROUTER_IFACE.encodeFunctionData('permit', [permitData.config.domain.verifyingContract, ethers.MaxUint256, permitData.deadline, permitData.v, permitData.r, permitData.s]);
   }
-  return iface.encodeFunctionData('multicall', [[permitCall, ...calls]]);
+  return ROUTER_IFACE.encodeFunctionData('multicall', [[permitCall, ...calls]]);
+}
+
+// ---- Permit2 SignatureTransfer support ----
+const PERMIT2_DOMAIN = { name: "Permit2", chainId: CHAIN_ID, verifyingContract: PERMIT2_ADDRESS };
+const PERMIT2_TYPES = {
+  PermitTransferFrom: [
+    { name: "permitted", type: "TokenPermissions" },
+    { name: "spender", type: "address" },
+    { name: "nonce", type: "uint256" },
+    { name: "deadline", type: "uint256" },
+  ],
+  TokenPermissions: [
+    { name: "token", type: "address" },
+    { name: "amount", type: "uint256" },
+  ],
+};
+
+async function checkPermit2Allowance(tokenAddress) {
+  let a = cacheGetAllowance(tokenAddress, connectedAddress, PERMIT2_ADDRESS);
+  if (a != null) return a;
+  const r = erc20Read(tokenAddress);
+  a = await r.allowance(connectedAddress, PERMIT2_ADDRESS);
+  cacheSetAllowance(tokenAddress, connectedAddress, PERMIT2_ADDRESS, a);
+  return a;
+}
+
+async function signPermit2(tokenAddress, amount) {
+  const deadline = BigInt(Math.trunc(Date.now() / 1000) + 3600);
+  const nonce = BigInt(Math.floor(Math.random() * Number.MAX_SAFE_INTEGER));
+  const values = {
+    permitted: { token: tokenAddress, amount },
+    spender: ZROUTER_ADDRESS,
+    nonce,
+    deadline,
+  };
+  const sig = await signer.signTypedData(PERMIT2_DOMAIN, PERMIT2_TYPES, values);
+  return { signature: sig, nonce, deadline, token: tokenAddress, amount };
+}
+
+function buildPermit2Multicall(calls, p2) {
+  const p2call = ROUTER_IFACE.encodeFunctionData('permit2TransferFrom', [p2.token, p2.amount, p2.nonce, p2.deadline, p2.signature]);
+  return ROUTER_IFACE.encodeFunctionData('multicall', [[p2call, ...calls]]);
 }
 
 // ---- ERC20 readers (cached, recreated on provider change) ----
@@ -1781,20 +2143,7 @@ function erc20Read(address) {
   return _erc20Read.get(k);
 }
 
-const _erc20BalCache = new Map();
-function erc20Reader(address) {
-  const k = address.toLowerCase();
-  if (!_erc20BalCache.has(k)) {
-    _erc20BalCache.set(k, new ethers.Contract(
-      address,
-      ["function balanceOf(address) view returns (uint256)"],
-      provider
-    ));
-  }
-  return _erc20BalCache.get(k);
-}
-
-// ---- Balance updates ----
+// ---- Balance updates (Multicall3 batched) ----
 async function updateBalances() {
   if (!provider || !connectedAddress) return;
 
@@ -1805,39 +2154,66 @@ async function updateBalances() {
   const toIsEth = t.address === ZERO_ADDRESS;
 
   try {
-    const balances = Object.create(null);
-    const fetches = [];
+    const calls = [];
+    const meta = [];
+    const balOfData = MC_BAL_IFACE.encodeFunctionData("balanceOf", [connectedAddress]);
 
+    // ETH balance via getEthBalance
     if (fromIsEth || toIsEth) {
-      fetches.push((async () => { balances.ETH = await provider.getBalance(connectedAddress); })());
+      calls.push({ target: MULTICALL3_ADDRESS, allowFailure: true,
+        callData: MULTICALL3_IFACE.encodeFunctionData("getEthBalance", [connectedAddress]) });
+      meta.push({ type: 'eth' });
     }
+    // From token balance
     if (!fromIsEth) {
-      const keyF = f.address.toLowerCase();
-      fetches.push((async () => {
-        const c = erc20Reader(f.address);
-        balances[keyF] = await c.balanceOf(connectedAddress);
-      })());
+      calls.push({ target: f.address, allowFailure: true, callData: balOfData });
+      meta.push({ type: 'erc20', key: f.address.toLowerCase() });
     }
+    // To token balance (if different)
     if (!toIsEth) {
       const keyT = t.address.toLowerCase();
       if (fromIsEth || keyT !== f.address.toLowerCase()) {
-        fetches.push((async () => {
-          const c = erc20Reader(t.address);
-          balances[keyT] = await c.balanceOf(connectedAddress);
-        })());
+        calls.push({ target: t.address, allowFailure: true, callData: balOfData });
+        meta.push({ type: 'erc20', key: keyT });
       }
     }
+    // Batch allowance reads for from token (saves RPCs during quote/swap)
+    if (!fromIsEth) {
+      calls.push({ target: f.address, allowFailure: true,
+        callData: MC_BAL_IFACE.encodeFunctionData("allowance", [connectedAddress, ZROUTER_ADDRESS]) });
+      meta.push({ type: 'allow', token: f.address, spender: ZROUTER_ADDRESS });
+      calls.push({ target: f.address, allowFailure: true,
+        callData: MC_BAL_IFACE.encodeFunctionData("allowance", [connectedAddress, PERMIT2_ADDRESS]) });
+      meta.push({ type: 'allow', token: f.address, spender: PERMIT2_ADDRESS });
+    }
 
-    await Promise.all(fetches);
-
+    const results = await multicallRead(calls);
     if (seq !== _balSeq || fromSnap !== fromToken || toSnap !== toToken) return;
 
+    const balances = Object.create(null);
+    for (let i = 0; i < meta.length; i++) {
+      const m = meta[i], r = results[i];
+      if (!r || !r.success) continue;
+      try {
+        if (m.type === 'eth') {
+          balances.ETH = MULTICALL3_IFACE.decodeFunctionResult("getEthBalance", r.returnData)[0];
+          setCachedBalance(ZERO_ADDRESS, balances.ETH);
+        } else if (m.type === 'erc20') {
+          balances[m.key] = MC_BAL_IFACE.decodeFunctionResult("balanceOf", r.returnData)[0];
+          setCachedBalance(m.key, balances[m.key]);
+        } else if (m.type === 'allow') {
+          cacheSetAllowance(m.token, connectedAddress, m.spender,
+            MC_BAL_IFACE.decodeFunctionResult("allowance", r.returnData)[0]);
+        }
+      } catch {}
+    }
+
     const fromStr = fromIsEth
-      ? `${fmt(ethers.formatEther(balances.ETH))} ETH`
-      : `${fmt(ethers.formatUnits(balances[f.address.toLowerCase()], f.decimals))} ${f.symbol}`;
+      ? `${fmt(ethers.formatEther(balances.ETH ?? 0n))} ETH`
+      : `${fmt(ethers.formatUnits(balances[f.address.toLowerCase()] ?? 0n, f.decimals))} ${f.symbol}`;
     const toStr = toIsEth
-      ? `${fmt(ethers.formatEther(balances.ETH))} ETH`
-      : `${fmt(ethers.formatUnits(balances[t.address.toLowerCase()], t.decimals))} ${t.symbol}`;
+      ? `${fmt(ethers.formatEther(balances.ETH ?? 0n))} ETH`
+      : `${fmt(ethers.formatUnits(balances[t.address.toLowerCase()] ?? 0n, t.decimals))} ${t.symbol}`;
 
     setText("fromBalance", `Balance: ${fromStr}`);
     setText("toBalance", `Balance: ${toStr}`);
@@ -1850,7 +2226,28 @@ async function updateBalances() {
 const AMM_NAMES = {
   0: "Uniswap V2", 1: "SushiSwap", 2: "zAMM",
   3: "Uniswap V3", 4: "Uniswap V4", 5: "Curve",
+  6: "Lido", 7: "WETH Wrap", 8: "V4 Hooked",
 };
+
+// ---- Hoisted ABIs / Interfaces (avoid re-parsing per call) ----
+const QUOTER_IFACE = new ethers.Interface([
+  "function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)",
+  "function buildSplitSwap(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
+  "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
+  "function quoteCurve(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 maxCandidates) view returns (uint256 amountIn,uint256 amountOut,address bestPool,bool usedUnderlying,bool usedStable,uint8 iIndex,uint8 jIndex)",
+  "function quoteV4(bool,address,address,uint24,int24,address,uint256) view returns (uint256 amountIn, uint256 amountOut)",
+]);
+const V4_SWAP_IFACE = new ethers.Interface([
+  "function swapExactTokensForTokens(uint256,uint256,bool,(address,address,uint24,int24,address),bytes,address,uint256) payable returns (int256)",
+]);
+const ROUTER_IFACE = new ethers.Interface([
+  "function deposit(address,uint256,uint256) payable",
+  "function execute(address,uint256,bytes) payable returns (bytes)",
+  "function multicall(bytes[]) payable returns (bytes[])",
+  "function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",
+  "function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)",
+  "function permit2TransferFrom(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)",
+]);
 
 // ---- Quote refresh timer ----
 let _refreshTimer = null;
@@ -1964,8 +2361,11 @@ async function handleAmountChange() {
         cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
       }
       if (allowance < amountIn) {
-        const permitCfg = PERMIT_CONFIG[fromData.address.toLowerCase()];
-        btnLabel = permitCfg ? "Swap" : "Approve & Swap";
+        const [permitCfg, p2Allowance] = await Promise.all([
+          getPermitConfig(fromData.address),
+          checkPermit2Allowance(fromData.address),
+        ]);
+        btnLabel = (permitCfg || p2Allowance >= amountIn) ? "Swap" : "Approve & Swap";
       }
     }
 
@@ -1973,9 +2373,13 @@ async function handleAmountChange() {
     setDisabled(swapBtn, false);
   } catch (e) {
     console.error("Quote error:", e);
+    toAmountEl.value = "";
+    setShown(quoteInfoEl, false);
+    stopQuoteRefresh();
     const msg = /Too many decimals|Invalid number|Empty amount/i.test(String(e?.message || ""))
-      ? e.message : "Re-trying…";
+      ? e.message : "Quote failed";
     setText(swapBtn, msg);
+    setDisabled(swapBtn, true);
     setTimeout(() => {
       if (seq === _quoteSeq) {
         setText(swapBtn, "Enter an amount");
@@ -1993,19 +2397,22 @@ async function setMaxFromBalance() {
     }
 
     const f = tokens[fromToken];
-    let raw;
+    let raw = getCachedBalance(f.address);
 
-    if (f.address === ZERO_ADDRESS) {
-      raw = await provider.getBalance(connectedAddress);
-      raw = (raw * 95n) / 100n;
-    } else {
-      const c = new ethers.Contract(
-        f.address,
-        ["function balanceOf(address) view returns (uint256)"],
-        provider
-      );
-      raw = await c.balanceOf(connectedAddress);
+    if (raw == null) {
+      // Cache miss — single fallback RPC
+      if (f.address === ZERO_ADDRESS) {
+        raw = await provider.getBalance(connectedAddress);
+      } else {
+        const c = new ethers.Contract(f.address,
+          ["function balanceOf(address) view returns (uint256)"], provider);
+        raw = await c.balanceOf(connectedAddress);
+      }
+      setCachedBalance(f.address, raw);
     }
+
+    // Reserve 5% for gas when sending ETH
+    if (f.address === ZERO_ADDRESS) raw = (raw * 95n) / 100n;
 
     const maxStr = ethers.formatUnits(raw, f.decimals);
     const pretty = maxStr.includes(".") ? maxStr.replace(/\.?0+$/, "") : maxStr;
@@ -2033,7 +2440,6 @@ function readSlippage(finalize = false) {
       el.value = v.toFixed(stepDigits);
     }
   } else if (finalize) {
-    if (!Number.isFinite(slippageBps)) slippageBps = 50;
     const stepDigits = (String(el.step || "0.1").split(".")[1] || "").length;
     el.value = clamp(slippageBps / 100, 0, 20).toFixed(stepDigits);
   }
@@ -2070,8 +2476,56 @@ document.addEventListener("DOMContentLoaded", initSimpleSlippage);
 // ---- Quote via RPC ----
 function getReceiver() {
   const v = ($("receiverAddress")?.value || "").trim();
-  if (v && ethers.isAddress(v)) return ethers.getAddress(v);
+  if (v && ethers.isAddress(v) && v !== ZERO_ADDRESS) return ethers.getAddress(v);
   return connectedAddress;
+}
+
+async function getV4HookedQuote(rpc, amountIn, fromAddr, toAddr, receiver, deadline, slipBps) {
+  // Only activate for ETH↔PNKSTR swaps
+  const isETHToPNKSTR = fromAddr === ZERO_ADDRESS && toAddr.toLowerCase() === PNKSTR_ADDRESS.toLowerCase();
+  const isPNKSTRToETH = fromAddr.toLowerCase() === PNKSTR_ADDRESS.toLowerCase() && toAddr === ZERO_ADDRESS;
+  if (!isETHToPNKSTR && !isPNKSTRToETH) return null;
+
+  // Quote via zQuoter.quoteV4 — a view function, no ETH/token balance needed.
+  // PNKSTR pool: fee=0 (hook-managed dynamic fee), tickSpacing=60.
+  // quoteV4 reads the current dynamic fee from slot0.lpFee (set by the hook via
+  // updateDynamicLPFee) and uses it in SwapMath.computeSwapStep, so the ~10% hook
+  // tax is reflected in the quote. No ERC20 transfer tax on PNKSTR itself.
+  const quoter = new ethers.Contract(ZQUOTER_ADDRESS, QUOTER_IFACE, rpc);
+
+  let amountOut;
+  try {
+    const result = await quoter.quoteV4(
+      false, fromAddr, toAddr, 0, 60, PNKSTR_HOOK_ADDRESS, amountIn
+    );
+    amountOut = result.amountOut;
+    if (amountOut <= 0n) return null;
+  } catch (e) {
+    console.warn("V4 hooked quote failed:", e);
+    return null;
+  }
+
+  // Build execution calldata with slippage
+  const poolKey = [ZERO_ADDRESS, PNKSTR_ADDRESS, 0, 60, PNKSTR_HOOK_ADDRESS];
+  const zeroForOne = isETHToPNKSTR;
+  const amountOutMin = amountOut * (10000n - BigInt(slipBps)) / 10000n;
+  const execSwapData = V4_SWAP_IFACE.encodeFunctionData("swapExactTokensForTokens", [
+    amountIn, amountOutMin, zeroForOne, poolKey, "0x", receiver, deadline
+  ]);
+
+  let multicall, msgValue;
+  if (isETHToPNKSTR) {
+    const executeCall = ROUTER_IFACE.encodeFunctionData("execute", [V4_ROUTER_ADDRESS, amountIn, execSwapData]);
+    multicall = ROUTER_IFACE.encodeFunctionData("multicall", [[executeCall]]);
+    msgValue = amountIn;
+  } else {
+    const depositCall = ROUTER_IFACE.encodeFunctionData("deposit", [PNKSTR_ADDRESS, 0n, amountIn]);
+    const executeCall = ROUTER_IFACE.encodeFunctionData("execute", [V4_ROUTER_ADDRESS, 0n, execSwapData]);
+    multicall = ROUTER_IFACE.encodeFunctionData("multicall", [[depositCall, executeCall]]);
+    msgValue = 0n;
+  }
+
+  return { amountOut, multicall, msgValue };
 }
 
 async function getQuote(fromAmountStr, fromSym, toSym) {
@@ -2085,19 +2539,14 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
   readSlippage(true);
   const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
 
-  const quoterAbi = [
-    "function buildBestSwapViaETHMulticall(address to,address refundTo,bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) a, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) b, bytes[] calls, bytes multicall, uint256 msgValue)",
-    "function buildSplitSwap(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
-    "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
-    "function quoteCurve(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 maxCandidates) view returns (uint256 amountIn,uint256 amountOut,address bestPool,bool usedUnderlying,bool usedStable,uint8 iIndex,uint8 jIndex)",
-  ];
-
   return await quoteRPC.call(async (rpc) => {
-    const quoter = new ethers.Contract(ZQUOTER_ADDRESS, quoterAbi, rpc);
+    const quoter = new ethers.Contract(ZQUOTER_ADDRESS, QUOTER_IFACE, rpc);
     const callOpts = { blockTag: "latest" };
 
-    // Fire all 4 calls in parallel
-    const [bestResult, splitResult, quotesResult, curveResult] = await Promise.allSettled([
+    // Fire all calls in parallel (V4 hooked only for PNKSTR swaps)
+    const isPNKSTR = fromData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase()
+      || toData.address.toLowerCase() === PNKSTR_ADDRESS.toLowerCase();
+    const allCalls = [
       quoter.buildBestSwapViaETHMulticall(
         receiver, connectedAddress, false,
         fromData.address, toData.address,
@@ -2109,7 +2558,9 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       ),
       quoter.getQuotes(false, fromData.address, toData.address, amountIn, callOpts),
       quoter.quoteCurve(false, fromData.address, toData.address, amountIn, 8, callOpts),
-    ]);
+    ];
+    if (isPNKSTR) allCalls.push(getV4HookedQuote(rpc, amountIn, fromData.address, toData.address, receiver, deadline, slippageBps));
+    const [bestResult, splitResult, quotesResult, curveResult, v4HookedResult] = await Promise.allSettled(allCalls);
 
     // bestResult is required
     if (bestResult.status === 'rejected') throw bestResult.reason;
@@ -2165,6 +2616,27 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
         const c = curveResult.value;
         if (c.amountOut > 0n) {
           result.allQuotes.push({ source: "Curve", sourceId: 5, feeBps: 0n, amountIn: c.amountIn, amountOut: c.amountOut });
+        }
+      }
+    }
+
+    // Check if V4 hooked pool beats current best
+    if (v4HookedResult?.status === 'fulfilled' && v4HookedResult.value) {
+      const v4 = v4HookedResult.value;
+      if (v4.amountOut > 0n) {
+        if (result.allQuotes) {
+          result.allQuotes.push({ source: "V4 Hooked", sourceId: 8, feeBps: 1000n, amountIn, amountOut: v4.amountOut });
+        }
+        if (v4.amountOut > result.expectedOutput) {
+          result.expectedOutput = v4.amountOut;
+          result.multicall = v4.multicall;
+          result.msgValue = v4.msgValue;
+          result.sourceA = "V4 Hooked";
+          result.sourceB = null;
+          result.isTwoHop = false;
+          result.isSplit = false;
+          result.splitLegs = null;
+          result.calls = null;
         }
       }
     }
@@ -2232,9 +2704,7 @@ async function getSpotRate(fromSym, toSym) {
 
   try {
     const spotRate = await quoteRPC.call(async (rpc) => {
-      const quoter = new ethers.Contract(ZQUOTER_ADDRESS, [
-        "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
-      ], rpc);
+      const quoter = new ethers.Contract(ZQUOTER_ADDRESS, QUOTER_IFACE, rpc);
       const q = await quoter.getQuotes(false, fromData.address, toData.address, refAmount, { blockTag: "latest" });
       if (q.best.amountOut === 0n || q.best.amountIn === 0n) return null;
       // Rate = amountOut / amountIn (both as BigInt, compute as float)
@@ -2302,14 +2772,16 @@ async function withRetry(task, { tries = 3, base = 120 } = {}) {
 let _quoteLock = Promise.resolve();
 let _pendingQuoteArgs = null;
 
+let _quoteResult = null;
 function requestQuote(amtStr, fromSnap, toSnap) {
   _pendingQuoteArgs = { amtStr, fromSnap, toSnap };
   _quoteLock = _quoteLock.then(async () => {
     const args = _pendingQuoteArgs;
     _pendingQuoteArgs = null;
-    if (!args) return;
+    if (!args) return _quoteResult;
     const { amtStr, fromSnap, toSnap } = args;
-    return withRetry(() => getQuote(amtStr, fromSnap, toSnap));
+    _quoteResult = await withRetry(() => getQuote(amtStr, fromSnap, toSnap));
+    return _quoteResult;
   });
   return _quoteLock;
 }
@@ -2330,7 +2802,8 @@ async function executeSwap() {
     }
 
     const amtStr = $("fromAmount").value;
-    if (!amtStr || parseFloat(amtStr) <= 0) {
+    const amtNum = parseFloat(amtStr);
+    if (!amtStr || !Number.isFinite(amtNum) || amtNum <= 0) {
       alert("Please enter an amount");
       return;
     }
@@ -2356,16 +2829,13 @@ async function executeSwap() {
 
     // ERC20 approval
     if (fromData.address !== ZERO_ADDRESS) {
-      let allowance = cacheGetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS);
-      if (allowance == null) {
-        const r = erc20Read(fromData.address);
-        swapBtn.textContent = "Checking allowance...";
-        allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
-        cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
-      }
+      const r = erc20Read(fromData.address);
+      swapBtn.textContent = "Checking allowance...";
+      let allowance = await r.allowance(connectedAddress, ZROUTER_ADDRESS);
+      cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
 
       if (allowance < amountIn) {
-        const permitCfg = PERMIT_CONFIG[fromData.address.toLowerCase()];
+        const permitCfg = await getPermitConfig(fromData.address);
         if (permitCfg) {
           // --- PERMIT PATH (single tx) ---
           swapBtn.textContent = "Sign permit...";
@@ -2373,24 +2843,40 @@ async function executeSwap() {
           const innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
           txData = buildPermitMulticall(innerCalls, permitData);
         } else {
-          // --- APPROVE PATH (two tx, fallback for non-permit tokens) ---
-          swapBtn.textContent = "Approving token...";
-          const erc20W = new ethers.Contract(
-            fromData.address,
-            ["function approve(address,uint256) returns (bool)"],
-            signer
-          );
-          const approveTx = await wcTransaction(
-            erc20W.approve(ZROUTER_ADDRESS, ethers.MaxUint256),
-            'Approve token spending in your wallet'
-          );
-          swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${approveTx.hash}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
-          const rc = await waitForTx(approveTx);
-          if (rc.status === 0) throw new Error("Approval transaction failed");
-          const fresh = await getQuote(amtStr, fromSnap, toSnap);
-          txData = fresh.multicall;
-          quote.msgValue = fresh.msgValue;
-          cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
+          // --- Check Permit2 allowance ---
+          let p2Allowance = cacheGetAllowance(fromData.address, connectedAddress, PERMIT2_ADDRESS);
+          if (p2Allowance == null) {
+            swapBtn.textContent = "Checking Permit2...";
+            const r2 = erc20Read(fromData.address);
+            p2Allowance = await r2.allowance(connectedAddress, PERMIT2_ADDRESS);
+            cacheSetAllowance(fromData.address, connectedAddress, PERMIT2_ADDRESS, p2Allowance);
+          }
+          if (p2Allowance >= amountIn) {
+            // --- PERMIT2 PATH (single tx, sign-only) ---
+            swapBtn.textContent = "Sign Permit2...";
+            const permit2Data = await signPermit2(fromData.address, amountIn);
+            const innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
+            txData = buildPermit2Multicall(innerCalls, permit2Data);
+          } else {
+            // --- APPROVE PATH (two tx, fallback for non-permit tokens) ---
+            swapBtn.textContent = "Approving token...";
+            const erc20W = new ethers.Contract(
+              fromData.address,
+              ["function approve(address,uint256) returns (bool)"],
+              signer
+            );
+            const approveTx = await wcTransaction(
+              erc20W.approve(ZROUTER_ADDRESS, ethers.MaxUint256),
+              'Approve token spending in your wallet'
+            );
+            swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+            const rc = await waitForTx(approveTx);
+            if (rc.status === 0) throw new Error("Approval transaction failed");
+            const fresh = await getQuote(amtStr, fromSnap, toSnap);
+            txData = fresh.multicall;
+            quote.msgValue = fresh.msgValue;
+            cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
+          }
         }
       }
     }
@@ -2406,7 +2892,7 @@ async function executeSwap() {
       }),
       'Confirm swap in your wallet'
     );
-    swapBtn.innerHTML = `Confirming swap... <a href="https://etherscan.io/tx/${swapTx.hash}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+    swapBtn.innerHTML = `Confirming swap... <a href="https://etherscan.io/tx/${escAttr(swapTx.hash)}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
 
     const receipt = await waitForTx(swapTx);
     if (receipt.status === 0) throw new Error("Swap transaction failed");
@@ -2508,6 +2994,8 @@ function openTokenModal(side) {
   $("tokenModal").classList.add('active');
   document.body.classList.add('modal-open');
   if (searchInput) searchInput.focus();
+  // Batch-fetch all token balances via Multicall3 (single RPC)
+  if (connectedAddress) fetchModalBalances();
 }
 
 function closeTokenModal() {
@@ -2559,7 +3047,8 @@ async function addCustomToken() {
     const [rawSymbol, rawDecimals] = await Promise.all([erc20.symbol(), erc20.decimals()]);
 
     const symbol = String(rawSymbol || "").trim().slice(0, 24) || "TKN";
-    const decimals = Math.max(0, Math.min(36, Number(rawDecimals))) || 18;
+    const rawDec = Number(rawDecimals);
+    const decimals = Number.isInteger(rawDec) && rawDec >= 0 && rawDec <= 36 ? rawDec : 18;
 
     const existing = tokens[symbol];
     if (existing && existing.address.toLowerCase() !== address.toLowerCase()) {
@@ -2614,5 +3103,6 @@ window.addEventListener("load", async () => {
 });
 
 </script>
+<script defer src="https://static.cloudflareinsights.com/beacon.min.js/vcd15cbe7772f49c399c6a5babf22c1241717689176015" integrity="sha512-ZpsOmlRQV6y907TI0dKBHq9Md29nnaEIPlkf84rnaERnq6zvWvPUqr2ft8M1aS28oN72PdrCzSjY4U6VaAw1EQ==" data-cf-beacon='{"version":"2024.11.0","token":"8510b592df8f4a69b87bbf8e840f200c","r":1,"server_timing":{"name":{"cfCacheStatus":true,"cfEdge":true,"cfExtPri":true,"cfL4":true,"cfOrigin":true,"cfSpeedBrain":true},"location_startswith":null}}' crossorigin="anonymous"></script>
 </body>
 </html>

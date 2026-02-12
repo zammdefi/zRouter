@@ -1,0 +1,36 @@
+{
+  "name": "zamm",
+  "version": "1.0.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./ethers": {
+      "types": "./dist/ethers.d.ts",
+      "import": "./dist/ethers.js"
+    },
+    "./viem": {
+      "types": "./dist/viem.d.ts",
+      "import": "./dist/viem.js"
+    }
+  },
+  "peerDependencies": {
+    "ethers": "^6.0.0",
+    "viem": "^2.0.0"
+  },
+  "peerDependenciesMeta": {
+    "ethers": { "optional": true },
+    "viem": { "optional": true }
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "files": ["dist"],
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "ethers": "^6.0.0",
+    "viem": "^2.0.0"
+  }
+}
