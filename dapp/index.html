@@ -776,8 +776,8 @@ function toggleDark() {
 
 // ---- Constants ----
 const CHAIN_ID = 1;
-const ZQUOTER_ADDRESS = "0x9f373A73ED229C9D133A189c095E2fFb7B77703E";
-const ZROUTER_ADDRESS = "0x0000000000001C3a3Aa8FDfca4f5c0c94583aC46";
+const ZQUOTER_ADDRESS = "0x82393672d597b70437b8df275172a3b3e157aeb6";
+const ZROUTER_ADDRESS = "0x000000000000FB114709235f1ccBFfb925F600e4";
 const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
 const WBTC_ADDRESS = "0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599";
@@ -2236,6 +2236,7 @@ const QUOTER_IFACE = new ethers.Interface([
   "function getQuotes(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut) best, tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[] quotes)",
   "function quoteCurve(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 maxCandidates) view returns (uint256 amountIn,uint256 amountOut,address bestPool,bool usedUnderlying,bool usedStable,uint8 iIndex,uint8 jIndex)",
   "function quoteV4(bool,address,address,uint24,int24,address,uint256) view returns (uint256 amountIn, uint256 amountOut)",
+  "function buildSplitSwapHooked(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline,uint24 hookPoolFee,int24 hookTickSpacing,address hookAddress) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
 ]);
 const V4_SWAP_IFACE = new ethers.Interface([
   "function swapExactTokensForTokens(uint256,uint256,bool,(address,address,uint24,int24,address),bytes,address,uint256) payable returns (int256)",
@@ -2244,6 +2245,7 @@ const ROUTER_IFACE = new ethers.Interface([
   "function deposit(address,uint256,uint256) payable",
   "function execute(address,uint256,bytes) payable returns (bytes)",
   "function multicall(bytes[]) payable returns (bytes[])",
+  "function sweep(address,uint256,uint256,address) payable",
   "function permit(address token, uint256 value, uint256 deadline, uint8 v, bytes32 r, bytes32 s)",
   "function permitDAI(uint256 nonce, uint256 expiry, uint8 v, bytes32 r, bytes32 s)",
   "function permit2TransferFrom(address token, uint256 amount, uint256 nonce, uint256 deadline, bytes signature)",
@@ -2481,10 +2483,9 @@ function getReceiver() {
 }
 
 async function getV4HookedQuote(rpc, amountIn, fromAddr, toAddr, receiver, deadline, slipBps) {
-  // Only activate for ETH↔PNKSTR swaps
+  // Only activate for ETH→PNKSTR (ERC20 input hits Unauthorized on V4_ROUTER)
   const isETHToPNKSTR = fromAddr === ZERO_ADDRESS && toAddr.toLowerCase() === PNKSTR_ADDRESS.toLowerCase();
-  const isPNKSTRToETH = fromAddr.toLowerCase() === PNKSTR_ADDRESS.toLowerCase() && toAddr === ZERO_ADDRESS;
-  if (!isETHToPNKSTR && !isPNKSTRToETH) return null;
+  if (!isETHToPNKSTR) return null;
 
   // Quote via zQuoter.quoteV4 — a view function, no ETH/token balance needed.
   // PNKSTR pool: fee=0 (hook-managed dynamic fee), tickSpacing=60.
@@ -2505,28 +2506,19 @@ async function getV4HookedQuote(rpc, amountIn, fromAddr, toAddr, receiver, deadl
     return null;
   }
 
-  // Build execution calldata with slippage
+  // Build execution calldata via execute(V4_ROUTER) with slippage
   const poolKey = [ZERO_ADDRESS, PNKSTR_ADDRESS, 0, 60, PNKSTR_HOOK_ADDRESS];
-  const zeroForOne = isETHToPNKSTR;
   const amountOutMin = amountOut * (10000n - BigInt(slipBps)) / 10000n;
   const execSwapData = V4_SWAP_IFACE.encodeFunctionData("swapExactTokensForTokens", [
-    amountIn, amountOutMin, zeroForOne, poolKey, "0x", receiver, deadline
+    amountIn, amountOutMin, true, poolKey, "0x", receiver, deadline
   ]);
+  const executeCall = ROUTER_IFACE.encodeFunctionData("execute", [V4_ROUTER_ADDRESS, amountIn, execSwapData]);
+  const multicall = ROUTER_IFACE.encodeFunctionData("multicall", [[executeCall]]);
 
-  let multicall, msgValue;
-  if (isETHToPNKSTR) {
-    const executeCall = ROUTER_IFACE.encodeFunctionData("execute", [V4_ROUTER_ADDRESS, amountIn, execSwapData]);
-    multicall = ROUTER_IFACE.encodeFunctionData("multicall", [[executeCall]]);
-    msgValue = amountIn;
-  } else {
-    const depositCall = ROUTER_IFACE.encodeFunctionData("deposit", [PNKSTR_ADDRESS, 0n, amountIn]);
-    const executeCall = ROUTER_IFACE.encodeFunctionData("execute", [V4_ROUTER_ADDRESS, 0n, execSwapData]);
-    multicall = ROUTER_IFACE.encodeFunctionData("multicall", [[depositCall, executeCall]]);
-    msgValue = 0n;
-  }
-
-  return { amountOut, multicall, msgValue };
+  return { amountOut, multicall, msgValue: amountIn };
 }
+
+
 
 async function getQuote(fromAmountStr, fromSym, toSym) {
   if (!connectedAddress) throw new Error("Connect wallet to get a quote");
@@ -2559,8 +2551,15 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       quoter.getQuotes(false, fromData.address, toData.address, amountIn, callOpts),
       quoter.quoteCurve(false, fromData.address, toData.address, amountIn, 8, callOpts),
     ];
-    if (isPNKSTR) allCalls.push(getV4HookedQuote(rpc, amountIn, fromData.address, toData.address, receiver, deadline, slippageBps));
-    const [bestResult, splitResult, quotesResult, curveResult, v4HookedResult] = await Promise.allSettled(allCalls);
+    if (isPNKSTR) {
+      allCalls.push(getV4HookedQuote(rpc, amountIn, fromData.address, toData.address, receiver, deadline, slippageBps));
+      allCalls.push(quoter.buildSplitSwapHooked(
+        receiver, fromData.address, toData.address,
+        amountIn, BigInt(slippageBps), deadline,
+        0, 60, PNKSTR_HOOK_ADDRESS, callOpts
+      ));
+    }
+    const [bestResult, splitResult, quotesResult, curveResult, v4HookedResult, v4SplitResult] = await Promise.allSettled(allCalls);
 
     // bestResult is required
     if (bestResult.status === 'rejected') throw bestResult.reason;
@@ -2638,6 +2637,26 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
           result.splitLegs = null;
           result.calls = null;
         }
+      }
+    }
+
+    // Check if V4 hooked split (standard venue + hooked pool) beats current best
+    if (v4SplitResult?.status === 'fulfilled' && v4SplitResult.value) {
+      const hs = v4SplitResult.value;
+      const hsTotal = hs.legs[0].amountOut + hs.legs[1].amountOut;
+      if (hsTotal > result.expectedOutput && hs.legs[0].amountOut > 0n && hs.legs[1].amountOut > 0n) {
+        result.expectedOutput = hsTotal;
+        result.multicall = hs.multicall;
+        result.msgValue = hs.msgValue ?? 0n;
+        result.isSplit = true;
+        result.isTwoHop = false;
+        result.sourceA = AMM_NAMES[hs.legs[0].source] || "Unknown";
+        result.sourceB = null;
+        result.splitLegs = [
+          { source: AMM_NAMES[hs.legs[0].source] || "Unknown", amountIn: hs.legs[0].amountIn, amountOut: hs.legs[0].amountOut, feeBps: hs.legs[0].feeBps },
+          { source: AMM_NAMES[hs.legs[1].source] || "Unknown", amountIn: hs.legs[1].amountIn, amountOut: hs.legs[1].amountOut, feeBps: hs.legs[1].feeBps },
+        ];
+        result.calls = null;
       }
     }
 
@@ -2775,7 +2794,7 @@ let _pendingQuoteArgs = null;
 let _quoteResult = null;
 function requestQuote(amtStr, fromSnap, toSnap) {
   _pendingQuoteArgs = { amtStr, fromSnap, toSnap };
-  _quoteLock = _quoteLock.then(async () => {
+  _quoteLock = _quoteLock.catch(() => {}).then(async () => {
     const args = _pendingQuoteArgs;
     _pendingQuoteArgs = null;
     if (!args) return _quoteResult;
@@ -2835,15 +2854,36 @@ async function executeSwap() {
       cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, allowance);
 
       if (allowance < amountIn) {
+        let approved = false;
+
+        // --- Try 1: EIP-2612 Permit (single tx) ---
         const permitCfg = await getPermitConfig(fromData.address);
         if (permitCfg) {
-          // --- PERMIT PATH (single tx) ---
-          swapBtn.textContent = "Sign permit...";
-          const permitData = await signPermit(permitCfg, fromData.address);
-          const innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
-          txData = buildPermitMulticall(innerCalls, permitData);
-        } else {
-          // --- Check Permit2 allowance ---
+          try {
+            swapBtn.textContent = "Sign permit...";
+            const permitData = await signPermit(permitCfg, fromData.address);
+            const innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
+            const permitTxData = buildPermitMulticall(innerCalls, permitData);
+            // Pre-flight: catch on-chain permit failures (e.g. InvalidShortString)
+            await provider.estimateGas({
+              from: connectedAddress,
+              to: ZROUTER_ADDRESS,
+              data: permitTxData,
+              value: quote.msgValue ?? 0n,
+            });
+            txData = permitTxData;
+            approved = true;
+          } catch (permitErr) {
+            const msg = String(permitErr?.message || '');
+            if (/user rejected|user denied|user cancelled/i.test(msg)) throw permitErr;
+            console.warn("Permit failed, falling back:", permitErr);
+            _permitCache.set(fromData.address.toLowerCase(), null);
+            txData = quote.multicall;
+          }
+        }
+
+        // --- Try 2: Permit2 (single tx, sign-only) ---
+        if (!approved) {
           let p2Allowance = cacheGetAllowance(fromData.address, connectedAddress, PERMIT2_ADDRESS);
           if (p2Allowance == null) {
             swapBtn.textContent = "Checking Permit2...";
@@ -2852,31 +2892,40 @@ async function executeSwap() {
             cacheSetAllowance(fromData.address, connectedAddress, PERMIT2_ADDRESS, p2Allowance);
           }
           if (p2Allowance >= amountIn) {
-            // --- PERMIT2 PATH (single tx, sign-only) ---
-            swapBtn.textContent = "Sign Permit2...";
-            const permit2Data = await signPermit2(fromData.address, amountIn);
-            const innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
-            txData = buildPermit2Multicall(innerCalls, permit2Data);
-          } else {
-            // --- APPROVE PATH (two tx, fallback for non-permit tokens) ---
-            swapBtn.textContent = "Approving token...";
-            const erc20W = new ethers.Contract(
-              fromData.address,
-              ["function approve(address,uint256) returns (bool)"],
-              signer
-            );
-            const approveTx = await wcTransaction(
-              erc20W.approve(ZROUTER_ADDRESS, ethers.MaxUint256),
-              'Approve token spending in your wallet'
-            );
-            swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
-            const rc = await waitForTx(approveTx);
-            if (rc.status === 0) throw new Error("Approval transaction failed");
-            const fresh = await getQuote(amtStr, fromSnap, toSnap);
-            txData = fresh.multicall;
-            quote.msgValue = fresh.msgValue;
-            cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
+            try {
+              swapBtn.textContent = "Sign Permit2...";
+              const permit2Data = await signPermit2(fromData.address, amountIn);
+              const innerCalls = quote.calls || decodeMulticallCalls(quote.multicall);
+              txData = buildPermit2Multicall(innerCalls, permit2Data);
+              approved = true;
+            } catch (p2Err) {
+              const msg = String(p2Err?.message || '');
+              if (/user rejected|user denied|user cancelled/i.test(msg)) throw p2Err;
+              console.warn("Permit2 failed, falling back:", p2Err);
+              txData = quote.multicall;
+            }
           }
+        }
+
+        // --- Try 3: Approve (two tx, traditional fallback) ---
+        if (!approved) {
+          swapBtn.textContent = "Approving token...";
+          const erc20W = new ethers.Contract(
+            fromData.address,
+            ["function approve(address,uint256) returns (bool)"],
+            signer
+          );
+          const approveTx = await wcTransaction(
+            erc20W.approve(ZROUTER_ADDRESS, ethers.MaxUint256),
+            'Approve token spending in your wallet'
+          );
+          swapBtn.innerHTML = `Approving... <a href="https://etherscan.io/tx/${escAttr(approveTx.hash)}" target="_blank" style="color:white;text-decoration:underline;font-weight:400">view tx &#8599;</a>`;
+          const rc = await waitForTx(approveTx);
+          if (rc.status === 0) throw new Error("Approval transaction failed");
+          const fresh = await getQuote(amtStr, fromSnap, toSnap);
+          txData = fresh.multicall;
+          quote.msgValue = fresh.msgValue;
+          cacheSetAllowance(fromData.address, connectedAddress, ZROUTER_ADDRESS, ethers.MaxUint256);
         }
       }
     }

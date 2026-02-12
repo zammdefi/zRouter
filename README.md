@@ -18,13 +18,9 @@ Features:
 - bridges all liquid ERC20s with ERC6909 finance on zAMM
 - includes WETH abstraction for all ETH input and output
 
-V2 deployed to Ethereum: [0x0000000000001C3a3Aa8FDfca4f5c0c94583aC46](https://etherscan.io/address/0x0000000000001C3a3Aa8FDfca4f5c0c94583aC46#code)
+Deployed to Ethereum: [0x000000000000FB114709235f1ccBFfb925F600e4](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4#code)
 
-V1 deployed to Ethereum: [0x00000000008892d085e0611eb8C8BDc9FD856fD3](https://etherscan.io/address/0x00000000008892d085e0611eb8C8BDc9FD856fD3#code)
-
-V0 deployed to [0x0000000000404FECAf36E6184245475eE1254835](https://contractscan.xyz/contract/0x0000000000404FECAf36E6184245475eE1254835) on Ethereum and Base.
-
-Router helper (`zQuoter`) deployed to [0x9f373A73ED229C9D133A189c095E2fFb7B77703E](https://etherscan.io/address/0x9f373A73ED229C9D133A189c095E2fFb7B77703E#code) on Ethereum.
+Router helper (`zQuoter`) deployed to [0x82393672d597b70437b8df275172a3b3e157aeb6](https://etherscan.io/address/0x82393672d597b70437b8df275172a3b3e157aeb6#code) on Ethereum.
 
 And [0x772E2810A471dB2CC7ADA0d37D6395476535889a](https://basescan.org/address/0x772E2810A471dB2CC7ADA0d37D6395476535889a#code) on Base.
 

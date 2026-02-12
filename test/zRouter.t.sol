@@ -2652,6 +2652,638 @@ contract zRouterTest is Test {
         assertGe(IERC20(WETH).balanceOf(VITALIK) - wethBefore, ethIn - 1, "chained WETH not swept");
         assertEq(IERC20(USDC).balanceOf(VITALIK) - usdcBefore, usdcGift, "chained USDC not swept");
     }
+
+    // ============= REVEAL NAME TESTS (WNS-13 patch) =============
+
+    /// @notice Happy path: commit → warp → revealName → NFT owned by user
+    function testRevealName_HappyPath() public {
+        address user = makeAddr("nameUser");
+        vm.deal(user, 1 ether);
+
+        string memory label = "zroutertest1234xyz";
+        bytes32 innerSecret = keccak256("test-inner-secret-happy");
+
+        // Derive secret bound to `user` (the WNS-13 fix)
+        bytes32 secret = keccak256(abi.encode(innerSecret, user));
+
+        // Compute commitment = keccak256(abi.encode(normalizedLabel, owner=router, secret))
+        bytes32 commitment = INameNFTExt(NAME_NFT).makeCommitment(label, address(router), secret);
+
+        // Commit on NameNFT (anyone can call)
+        vm.prank(user);
+        INameNFTExt(NAME_NFT).commit(commitment);
+
+        // Warp past MIN_COMMITMENT_AGE (60s)
+        vm.warp(block.timestamp + 61);
+
+        // Reveal via router
+        vm.prank(user);
+        uint256 tokenId = router.revealName{value: 0.01 ether}(label, innerSecret, user);
+
+        // Assert user owns the NFT
+        assertEq(INameNFTExt(NAME_NFT).ownerOf(tokenId), user, "user should own NFT");
+    }
+
+    /// @notice Attacker tries to front-run with different `to` → CommitmentNotFound
+    function testRevealName_FrontRunBlocked() public {
+        address user = makeAddr("nameUser2");
+        address attacker = makeAddr("attacker");
+        vm.deal(user, 1 ether);
+        vm.deal(attacker, 1 ether);
+
+        string memory label = "zroutertest5678abc";
+        bytes32 innerSecret = keccak256("test-inner-secret-frontrun");
+
+        // Secret bound to `user`
+        bytes32 secret = keccak256(abi.encode(innerSecret, user));
+        bytes32 commitment = INameNFTExt(NAME_NFT).makeCommitment(label, address(router), secret);
+
+        vm.prank(user);
+        INameNFTExt(NAME_NFT).commit(commitment);
+
+        vm.warp(block.timestamp + 61);
+
+        // Attacker calls revealName with their own address as `to`
+        // Router derives keccak256(abi.encode(innerSecret, attacker)) → different secret
+        // → different commitment → CommitmentNotFound
+        vm.prank(attacker);
+        vm.expectRevert(); // CommitmentNotFound from NameNFT
+        router.revealName{value: 0.01 ether}(label, innerSecret, attacker);
+    }
+
+    /// @notice Attacker calls revealName keeping to=user — succeeds but NFT goes to user
+    function testRevealName_FrontRunSameTo() public {
+        address user = makeAddr("nameUser3");
+        address attacker = makeAddr("attacker2");
+        vm.deal(user, 1 ether);
+        vm.deal(attacker, 1 ether);
+
+        string memory label = "zroutertest9012def";
+        bytes32 innerSecret = keccak256("test-inner-secret-sameto");
+
+        bytes32 secret = keccak256(abi.encode(innerSecret, user));
+        bytes32 commitment = INameNFTExt(NAME_NFT).makeCommitment(label, address(router), secret);
+
+        vm.prank(user);
+        INameNFTExt(NAME_NFT).commit(commitment);
+
+        vm.warp(block.timestamp + 61);
+
+        // Attacker calls but keeps to=user (pays gas + fee for nothing)
+        vm.prank(attacker);
+        uint256 tokenId = router.revealName{value: 0.01 ether}(label, innerSecret, user);
+
+        // NFT goes to user, not attacker
+        assertEq(INameNFTExt(NAME_NFT).ownerOf(tokenId), user, "NFT should go to user");
+    }
+
+    /// @notice Full dapp flow: multicall revealName + sweep excess ETH
+    function testRevealName_ViaMulticallWithSweep() public {
+        address user = makeAddr("nameUser4");
+        vm.deal(user, 1 ether);
+
+        string memory label = "zroutertest3456ghi";
+        bytes32 innerSecret = keccak256("test-inner-secret-multicall");
+
+        bytes32 secret = keccak256(abi.encode(innerSecret, user));
+        bytes32 commitment = INameNFTExt(NAME_NFT).makeCommitment(label, address(router), secret);
+
+        vm.prank(user);
+        INameNFTExt(NAME_NFT).commit(commitment);
+
+        vm.warp(block.timestamp + 61);
+
+        // Multicall: revealName (overpay) + sweep excess ETH back
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeWithSelector(zRouter.revealName.selector, label, innerSecret, user);
+        calls[1] = abi.encodeWithSelector(zRouter.sweep.selector, address(0), 0, 0, user);
+
+        uint256 ethBefore = user.balance;
+        uint256 overpay = 0.05 ether; // much more than the registration fee
+
+        vm.prank(user);
+        router.multicall{value: overpay}(calls);
+
+        uint256 ethAfter = user.balance;
+        // Sweep should return most of the overpay (minus the small registration fee)
+        assertGt(ethAfter, ethBefore - overpay, "should have swept excess back");
+        // User should have gotten back significantly more than half the overpay
+        assertGt(ethAfter, ethBefore - 0.005 ether, "fee should be small vs overpay");
+    }
+
+    // ============= swapVZ ERC20 EXACT-OUT REFUND TEST (WNS-8 patch) =============
+
+    /// @notice Verify USDC leftover is refunded on exactOut via ZAMM
+    function testSwapVZ_ExactOut_ERC20Refund() public {
+        vm.prank(routerOwner);
+        router.ensureAllowance(USDC, false, ZAMM);
+
+        uint256 usdcBudget = USDC_IN; // 100 USDC
+        uint256 targetEthOut = 0.01 ether; // small exact-out target
+
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.prank(VITALIK);
+        router.swapVZ(
+            VITALIK,
+            true, // exactOut
+            30,
+            USDC,
+            address(0),
+            0,
+            0,
+            targetEthOut,
+            usdcBudget,
+            DEADLINE
+        );
+
+        uint256 usdcAfter = IERC20(USDC).balanceOf(VITALIK);
+        uint256 ethAfter = VITALIK.balance;
+
+        // Should have received the exact ETH target
+        assertGe(ethAfter - ethBefore, targetEthOut, "should receive target ETH");
+        // Should have refunded leftover USDC (didn't spend entire budget)
+        uint256 usdcSpent = usdcBefore - usdcAfter;
+        assertLt(usdcSpent, usdcBudget, "should refund leftover USDC");
+        assertGt(usdcSpent, 0, "should have spent some USDC");
+    }
+
+    // ============= ADDITIONAL COVERAGE TESTS =============
+
+    // ── V3 exactOut with token input (callback safeTransferFrom path) ──
+
+    /// @notice V3 exactOut USDC→ETH: pulls exact USDC from user, no over-pull
+    function testExactOut_USDCtoETH_V3() public {
+        uint256 targetEthOut = 0.01 ether;
+        uint256 usdcBudget = 100e6; // generous budget
+
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.startPrank(VITALIK);
+        IERC20(USDC).approve(address(router), usdcBudget);
+        router.swapV3(
+            VITALIK,
+            true, // exactOut
+            3000,
+            USDC,
+            address(0), // ETH out
+            targetEthOut,
+            usdcBudget, // max USDC to spend
+            DEADLINE
+        );
+        vm.stopPrank();
+
+        uint256 ethAfter = VITALIK.balance;
+        uint256 usdcAfter = IERC20(USDC).balanceOf(VITALIK);
+
+        assertEq(ethAfter - ethBefore, targetEthOut, "should receive exact ETH");
+        uint256 usdcSpent = usdcBefore - usdcAfter;
+        assertGt(usdcSpent, 0, "should spend some USDC");
+        assertLt(usdcSpent, usdcBudget, "should not spend entire budget");
+    }
+
+    // ── V4 exactOut ──
+
+    /// @notice V4 exactOut ETH→USDC
+    function testExactOut_ETHtoUSDC_V4() public {
+        uint256 targetUsdcOut = 50e6;
+        uint256 ethBudget = ETH_IN;
+
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.prank(VITALIK);
+        router.swapV4{value: ethBudget}(
+            VITALIK,
+            true, // exactOut
+            3000,
+            60,
+            address(0), // ETH in
+            USDC,
+            targetUsdcOut,
+            ethBudget,
+            DEADLINE
+        );
+
+        uint256 usdcAfter = IERC20(USDC).balanceOf(VITALIK);
+        uint256 ethAfter = VITALIK.balance;
+
+        assertEq(usdcAfter - usdcBefore, targetUsdcOut, "should receive exact USDC");
+        assertLt(ethBefore - ethAfter, ethBudget, "should refund some ETH");
+    }
+
+    /// @notice V4 USDC→ETH exactIn (reverse direction)
+    function testExactIn_USDCtoETH_V4() public {
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.startPrank(VITALIK);
+        IERC20(USDC).approve(address(router), USDC_IN);
+        router.swapV4(VITALIK, false, 3000, 60, USDC, address(0), USDC_IN, 0, DEADLINE);
+        vm.stopPrank();
+
+        assertGt(VITALIK.balance - ethBefore, 0, "should receive ETH");
+    }
+
+    // ── swapVZ exactOut ETH refund (WNS-8 ETH branch) ──
+
+    /// @notice swapVZ exactOut with ETH input — refunds excess ETH
+    function testSwapVZ_ExactOut_ETHRefund() public {
+        uint256 targetUsdcOut = 50e6;
+        uint256 ethBudget = ETH_IN; // 0.05 ETH
+
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.prank(VITALIK);
+        router.swapVZ{value: ethBudget}(
+            VITALIK,
+            true, // exactOut
+            30,
+            address(0), // ETH in
+            USDC,
+            0,
+            0,
+            targetUsdcOut,
+            ethBudget,
+            DEADLINE
+        );
+
+        uint256 usdcAfter = IERC20(USDC).balanceOf(VITALIK);
+        uint256 ethAfter = VITALIK.balance;
+
+        assertGe(usdcAfter - usdcBefore, targetUsdcOut, "should receive target USDC");
+        // ETH refund should have occurred (didn't spend full budget)
+        uint256 ethSpent = ethBefore - ethAfter;
+        assertLt(ethSpent, ethBudget, "should refund excess ETH");
+        assertGt(ethSpent, 0, "should have spent some ETH");
+    }
+
+    // ── execute + trust ──
+
+    /// @notice trust + execute: trusted target can be called
+    function testExecute_TrustedTarget() public {
+        MockWrapExecutor executor = new MockWrapExecutor();
+
+        // Trust the executor
+        vm.prank(routerOwner);
+        router.trust(address(executor), true);
+
+        // Fund router with ETH
+        vm.deal(address(router), 0.1 ether);
+
+        // Execute: wrap ETH and send WETH to Vitalik
+        uint256 wethBefore = IERC20(WETH).balanceOf(VITALIK);
+
+        router.execute(
+            address(executor),
+            0.05 ether,
+            abi.encodeCall(MockWrapExecutor.wrapAndSend, (VITALIK, 0.05 ether))
+        );
+
+        assertEq(IERC20(WETH).balanceOf(VITALIK) - wethBefore, 0.05 ether, "WETH should arrive");
+    }
+
+    /// @notice execute reverts for untrusted target
+    function testExecute_UntrustedTarget_Reverts() public {
+        MockWrapExecutor executor = new MockWrapExecutor();
+        // Not trusted — should revert
+        vm.expectRevert(zRouter.Unauthorized.selector);
+        router.execute(
+            address(executor), 0, abi.encodeCall(MockWrapExecutor.wrapAndSend, (VITALIK, 0))
+        );
+    }
+
+    /// @notice trust: only owner can call
+    function testTrust_OnlyOwner() public {
+        vm.prank(VITALIK); // not owner
+        vm.expectRevert(zRouter.Unauthorized.selector);
+        router.trust(address(1), true);
+    }
+
+    /// @notice un-trust revokes access
+    function testExecute_Untrust_Revokes() public {
+        MockWrapExecutor executor = new MockWrapExecutor();
+        vm.startPrank(routerOwner);
+        router.trust(address(executor), true);
+        router.trust(address(executor), false); // revoke
+        vm.stopPrank();
+
+        vm.expectRevert(zRouter.Unauthorized.selector);
+        router.execute(
+            address(executor), 0, abi.encodeCall(MockWrapExecutor.wrapAndSend, (VITALIK, 0))
+        );
+    }
+
+    // ── transferOwnership ──
+
+    /// @notice ownership transfer works and old owner loses access
+    function testTransferOwnership() public {
+        address newOwner = makeAddr("newOwner");
+
+        vm.prank(routerOwner);
+        router.transferOwnership(newOwner);
+
+        // Old owner can no longer call onlyOwner functions
+        vm.prank(routerOwner);
+        vm.expectRevert(zRouter.Unauthorized.selector);
+        router.trust(address(1), true);
+
+        // New owner can
+        vm.prank(newOwner);
+        router.trust(address(1), true); // should succeed
+    }
+
+    // ── wrap / unwrap standalone ──
+
+    /// @notice wrap: converts ETH to WETH in router, credits transient
+    function testWrap_Standalone() public {
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(router.wrap, (0.01 ether)); // wrap specific amount
+        calls[1] = abi.encodeCall(router.sweep, (WETH, 0, 0.01 ether, VITALIK));
+
+        uint256 wethBefore = IERC20(WETH).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.multicall{value: 0.01 ether}(calls);
+
+        assertEq(
+            IERC20(WETH).balanceOf(VITALIK) - wethBefore, 0.01 ether, "WETH should be swept to user"
+        );
+    }
+
+    /// @notice unwrap: converts WETH to ETH in router
+    function testUnwrap_Standalone() public {
+        // Fund router with WETH
+        vm.startPrank(WETH_WHALE);
+        IERC20(WETH).transfer(address(router), 0.01 ether);
+        vm.stopPrank();
+
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeCall(router.unwrap, (0.01 ether));
+        calls[1] = abi.encodeCall(router.sweep, (address(0), 0, 0, VITALIK));
+
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.prank(VITALIK);
+        router.multicall(calls);
+
+        assertGe(VITALIK.balance - ethBefore, 0.01 ether, "ETH should be swept to user");
+    }
+
+    // ── sweep standalone ──
+
+    /// @notice sweep ETH from router to user
+    function testSweep_ETH() public {
+        vm.deal(address(router), 0.1 ether);
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.prank(VITALIK);
+        router.sweep(address(0), 0, 0, VITALIK);
+
+        assertGe(VITALIK.balance - ethBefore, 0.1 ether, "should sweep all ETH");
+    }
+
+    /// @notice sweep ERC20 from router to user
+    function testSweep_ERC20() public {
+        vm.prank(USDC_WHALE);
+        IERC20(USDC).transfer(address(router), 100e6);
+
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.sweep(USDC, 0, 0, VITALIK);
+
+        assertEq(IERC20(USDC).balanceOf(VITALIK) - usdcBefore, 100e6, "should sweep all USDC");
+    }
+
+    /// @notice sweep with specific amount (not 0)
+    function testSweep_PartialAmount() public {
+        vm.prank(USDC_WHALE);
+        IERC20(USDC).transfer(address(router), 100e6);
+
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.sweep(USDC, 0, 50e6, VITALIK); // only sweep 50
+
+        assertEq(IERC20(USDC).balanceOf(VITALIK) - usdcBefore, 50e6, "should sweep partial");
+        assertEq(IERC20(USDC).balanceOf(address(router)), 50e6, "50 should remain in router");
+    }
+
+    // ── deposit with WETH (wrapping branch) ──
+
+    /// @notice deposit WETH with msg.value wraps ETH to WETH
+    function testDeposit_WETH_WrapsETH() public {
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeWithSelector(zRouter.deposit.selector, WETH, 0, 0.01 ether);
+        calls[1] = abi.encodeCall(router.sweep, (WETH, 0, 0, VITALIK));
+
+        uint256 wethBefore = IERC20(WETH).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.multicall{value: 0.01 ether}(calls);
+
+        assertEq(
+            IERC20(WETH).balanceOf(VITALIK) - wethBefore,
+            0.01 ether,
+            "WETH should arrive from ETH deposit"
+        );
+    }
+
+    /// @notice deposit ETH (native) credits transient, then sweep
+    function testDeposit_ETH_ThenSweep() public {
+        bytes[] memory calls = new bytes[](2);
+        calls[0] = abi.encodeWithSelector(zRouter.deposit.selector, address(0), 0, 0.01 ether);
+        calls[1] = abi.encodeCall(router.sweep, (address(0), 0, 0, VITALIK));
+
+        uint256 ethBefore = VITALIK.balance;
+
+        vm.prank(VITALIK);
+        router.multicall{value: 0.01 ether}(calls);
+
+        // ETH round-trips: deposit → sweep
+        assertGe(VITALIK.balance, ethBefore - 0.001 ether, "ETH should round-trip");
+    }
+
+    // ── revealName standalone: excess ETH stays in router ──
+
+    /// @notice revealName standalone (no sweep) leaves excess in router
+    function testRevealName_Standalone_ExcessStaysInRouter() public {
+        address user = makeAddr("nameUser5");
+        vm.deal(user, 1 ether);
+
+        string memory label = "zroutertest7890jkl";
+        bytes32 innerSecret = keccak256("test-inner-secret-standalone");
+        bytes32 secret = keccak256(abi.encode(innerSecret, user));
+        bytes32 commitment = INameNFTExt(NAME_NFT).makeCommitment(label, address(router), secret);
+
+        vm.prank(user);
+        INameNFTExt(NAME_NFT).commit(commitment);
+        vm.warp(block.timestamp + 61);
+
+        uint256 routerEthBefore = address(router).balance;
+
+        // Standalone call (no multicall, no sweep)
+        vm.prank(user);
+        router.revealName{value: 0.05 ether}(label, innerSecret, user);
+
+        // Router should have received the NameNFT refund (excess stays)
+        uint256 routerEthAfter = address(router).balance;
+        assertGt(routerEthAfter, routerEthBefore, "excess should stay in router");
+    }
+
+    // ── onERC721Received selector ──
+
+    /// @notice onERC721Received returns correct selector
+    function testOnERC721Received_ReturnsSelector() public view {
+        bytes4 result = router.onERC721Received(address(0), address(0), 0, "");
+        assertEq(result, bytes4(0x150b7a02), "wrong ERC721 receiver selector");
+    }
+
+    // ── ensureAllowance ──
+
+    /// @notice ensureAllowance: only owner can call
+    function testEnsureAllowance_OnlyOwner() public {
+        vm.prank(VITALIK);
+        vm.expectRevert(zRouter.Unauthorized.selector);
+        router.ensureAllowance(USDC, false, address(1));
+    }
+
+    // ── addLiquidity pass-through ──
+
+    /// @notice addLiquidity via multicall after deposit
+    function testAddLiquidity_ViaMulticall() public {
+        PoolKey memory key = PoolKey(0, 0, address(0), USDC, 30);
+
+        // Need router to have USDC approved on ZAMM
+        vm.prank(routerOwner);
+        router.ensureAllowance(USDC, false, ZAMM);
+
+        uint256 ethAmt = 0.01 ether;
+        uint256 usdcAmt = 35e6; // ~$35 for 0.01 ETH
+
+        // deposit USDC first (separate call, no msg.value — deposit reverts
+        // with InvalidMsgVal if msg.value != 0 for non-ETH/WETH tokens)
+        vm.prank(VITALIK);
+        IERC20(USDC).approve(address(router), usdcAmt);
+        vm.prank(VITALIK);
+        router.deposit(USDC, 0, usdcAmt);
+
+        // now addLiquidity with ETH via multicall
+        bytes[] memory calls = new bytes[](1);
+        calls[0] = abi.encodeWithSelector(
+            zRouter.addLiquidity.selector, key, ethAmt, usdcAmt, 0, 0, VITALIK, DEADLINE
+        );
+
+        vm.prank(VITALIK);
+        router.multicall{value: ethAmt}(calls);
+        // If we get here without reverting, the flow works
+    }
+
+    // ── V3 exactOut ETH→USDC refund correctness ──
+
+    /// @notice V3 exactOut ETH in: refunds exact excess
+    function testExactOut_ETHtoUSDC_V3_RefundExcess() public {
+        uint256 ethBudget = 0.1 ether;
+        uint256 targetUsdcOut = 50e6;
+
+        uint256 ethBefore = VITALIK.balance;
+        uint256 usdcBefore = IERC20(USDC).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.swapV3{value: ethBudget}(
+            VITALIK,
+            true, // exactOut
+            3000,
+            address(0), // ETH in
+            USDC,
+            targetUsdcOut,
+            ethBudget,
+            DEADLINE
+        );
+
+        uint256 ethSpent = ethBefore - VITALIK.balance;
+        uint256 usdcReceived = IERC20(USDC).balanceOf(VITALIK) - usdcBefore;
+
+        assertEq(usdcReceived, targetUsdcOut, "should receive exact USDC");
+        assertLt(ethSpent, ethBudget, "should refund excess ETH");
+        assertGt(ethSpent, 0, "should spend some ETH");
+    }
+
+    // ── Curve exactOut ETH input: both ETH and WETH dust refunded ──
+
+    function testCurve_ETHtoWEETH_ExactOut_RefundsDust() public {
+        (uint256 iWeth, uint256 jWeeth) = _wethWeethIndices();
+
+        uint256 targetOut = 0.003e18; // want 0.003 weETH
+
+        address[11] memory route;
+        route[0] = address(0); // ETH
+        route[1] = WETH; // sentinel for type 8
+        route[2] = WETH; // after wrap
+        route[3] = WEETH_WETH_NG_POOL;
+        route[4] = WEETH;
+
+        uint256[4][5] memory sp;
+        sp[0] = [uint256(0), uint256(0), uint256(8), uint256(0)]; // ETH→WETH
+        sp[1] = [iWeth, jWeeth, uint256(1), uint256(10)]; // exchange
+
+        address[5] memory basePools;
+
+        uint256 ethBudget = 0.1 ether; // generous budget
+
+        uint256 ethBefore = VITALIK.balance;
+        uint256 weethBefore = IERC20(WEETH).balanceOf(VITALIK);
+
+        vm.prank(VITALIK);
+        router.swapCurve{value: ethBudget}(
+            VITALIK,
+            true, // exactOut
+            route,
+            sp,
+            basePools,
+            targetOut,
+            ethBudget,
+            DEADLINE
+        );
+
+        uint256 ethSpent = ethBefore - VITALIK.balance;
+        uint256 weethReceived = IERC20(WEETH).balanceOf(VITALIK) - weethBefore;
+
+        assertGe(weethReceived, targetOut, "should receive at least target weETH");
+        assertLt(ethSpent, ethBudget, "should refund excess ETH");
+        // Verify router has no leftover WETH or ETH dust
+        assertEq(IERC20(WETH).balanceOf(address(router)), 0, "no WETH dust in router");
+    }
+
+    // ── deposit InvalidId revert ──
+
+    /// @notice deposit with id != 0 and msg.value reverts
+    function testDeposit_InvalidId_Reverts() public {
+        vm.prank(VITALIK);
+        vm.expectRevert(zRouter.InvalidId.selector);
+        router.deposit{value: 0.01 ether}(address(0), 1, 0.01 ether);
+    }
+
+    // ── deposit InvalidMsgVal revert ──
+
+    /// @notice deposit WETH with wrong msg.value reverts
+    function testDeposit_WETH_WrongMsgVal_Reverts() public {
+        vm.prank(VITALIK);
+        vm.expectRevert(zRouter.InvalidMsgVal.selector);
+        router.deposit{value: 0.02 ether}(WETH, 0, 0.01 ether);
+    }
+}
+
+interface INameNFTExt {
+    function makeCommitment(string calldata label, address owner, bytes32 secret)
+        external
+        pure
+        returns (bytes32);
+    function commit(bytes32 commitment) external;
+    function ownerOf(uint256 tokenId) external view returns (address);
 }
 
 contract MockWrapExecutor {

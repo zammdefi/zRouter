@@ -12,7 +12,8 @@ contract zQuoter {
         UNI_V4,
         CURVE,
         LIDO,
-        WETH_WRAP
+        WETH_WRAP,
+        V4_HOOKED
     }
 
     struct Quote {
@@ -1170,6 +1171,320 @@ contract zQuoter {
         }
     }
 
+    // ====================== V4 HOOKED SPLIT ======================
+
+    /// @dev Quote V4 hooked pool, returning 0 on failure.
+    function _tryQuoteV4Hooked(
+        address tokenIn,
+        address tokenOut,
+        uint256 amount,
+        uint24 fee,
+        int24 tick,
+        address hook
+    ) internal view returns (uint256) {
+        try this.quoteV4(false, tokenIn, tokenOut, fee, tick, hook, amount) returns (
+            uint256, uint256 o
+        ) {
+            return o;
+        } catch {
+            return 0;
+        }
+    }
+
+    /// @dev Build execute(V4_ROUTER) calldata for a V4 hooked pool swap (ETH input only).
+    function _buildV4HookedCalldata(
+        address to,
+        address tokenIn,
+        address tokenOut,
+        uint256 swapAmount,
+        uint256 amountLimit,
+        uint256 deadline,
+        uint24 hookPoolFee,
+        int24 hookTickSpacing,
+        address hookAddress
+    ) internal pure returns (bytes memory) {
+        // Sort tokens for the V4 pool key (currency0 < currency1)
+        (address c0, address c1) = tokenIn < tokenOut ? (tokenIn, tokenOut) : (tokenOut, tokenIn);
+        bool zeroForOne = tokenIn == c0;
+        bytes memory swapData = abi.encodeWithSelector(
+            IV4Router.swapExactTokensForTokens.selector,
+            swapAmount,
+            amountLimit,
+            zeroForOne,
+            IV4PoolKey(c0, c1, hookPoolFee, hookTickSpacing, hookAddress),
+            "",
+            to,
+            deadline
+        );
+        return abi.encodeWithSelector(IZRouter.execute.selector, V4_ROUTER, swapAmount, swapData);
+    }
+
+    /// @notice Build a split swap that includes a V4 hooked pool as a candidate.
+    ///         ExactIn only. Gathers standard venues + Curve + the hooked pool,
+    ///         finds the top 2, tries splits [100/0, 75/25, 50/50, 25/75, 0/100],
+    ///         and returns the optimal multicall.
+    function buildSplitSwapHooked(
+        address to,
+        address tokenIn,
+        address tokenOut,
+        uint256 swapAmount,
+        uint256 slippageBps,
+        uint256 deadline,
+        uint24 hookPoolFee,
+        int24 hookTickSpacing,
+        address hookAddress
+    ) public view returns (Quote[2] memory legs, bytes memory multicall, uint256 msgValue) {
+        unchecked {
+            require(swapAmount != 0, ZeroAmount());
+            tokenIn = _normalizeETH(tokenIn);
+            tokenOut = _normalizeETH(tokenOut);
+
+            // ---- Gather candidates ----
+            (, Quote[] memory baseQuotes) = getQuotes(false, tokenIn, tokenOut, swapAmount);
+            uint256 n = baseQuotes.length;
+            Quote[] memory cands = new Quote[](n + 2);
+            for (uint256 i; i < n; ++i) {
+                cands[i] = baseQuotes[i];
+            }
+
+            // Curve
+            {
+                (uint256 ci_, uint256 co_, address p_,,,,) =
+                    quoteCurve(false, tokenIn, tokenOut, swapAmount, 8);
+                if (p_ != address(0) && co_ > 0) {
+                    cands[n] = _asQuote(AMM.CURVE, ci_, co_);
+                    n++;
+                }
+            }
+
+            // V4 Hooked — ETH input only (ERC20 input hits Unauthorized on V4_ROUTER)
+            uint256 hIdx = type(uint256).max;
+            if (tokenIn == address(0)) {
+                uint256 ho_ = _tryQuoteV4Hooked(
+                    tokenIn, tokenOut, swapAmount, hookPoolFee, hookTickSpacing, hookAddress
+                );
+                if (ho_ > 0) {
+                    hIdx = n;
+                    cands[n] = Quote(AMM.V4_HOOKED, 0, swapAmount, ho_);
+                    n++;
+                }
+            }
+
+            // ---- Top 2 ----
+            uint256 idx1;
+            uint256 idx2;
+            uint256 out1;
+            uint256 out2;
+            for (uint256 i; i < n; ++i) {
+                if (cands[i].amountOut > out1) {
+                    out2 = out1;
+                    idx2 = idx1;
+                    out1 = cands[i].amountOut;
+                    idx1 = i;
+                } else if (cands[i].amountOut > out2) {
+                    out2 = cands[i].amountOut;
+                    idx2 = i;
+                }
+            }
+            if (out1 == 0) revert NoRoute();
+
+            bool ethIn = tokenIn == address(0);
+
+            // ---- Single venue fallback ----
+            if (out2 == 0 || idx1 == idx2) {
+                legs[0] = cands[idx1];
+                if (idx1 == hIdx) {
+                    uint256 lim = SlippageLib.limit(false, legs[0].amountOut, slippageBps);
+                    bytes[] memory c_ = new bytes[](1);
+                    c_[0] = _buildV4HookedCalldata(
+                        to,
+                        tokenIn,
+                        tokenOut,
+                        swapAmount,
+                        lim,
+                        deadline,
+                        hookPoolFee,
+                        hookTickSpacing,
+                        hookAddress
+                    );
+                    multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, c_);
+                    msgValue = ethIn ? swapAmount : 0;
+                } else {
+                    (, bytes memory cd,, uint256 mv) = buildBestSwap(
+                        to, false, tokenIn, tokenOut, swapAmount, slippageBps, deadline
+                    );
+                    bytes[] memory c_ = new bytes[](1);
+                    c_[0] = cd;
+                    multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, c_);
+                    msgValue = mv;
+                }
+                return (legs, multicall, msgValue);
+            }
+
+            // ---- Try splits ----
+            bool v1h = (idx1 == hIdx);
+            bool v2h = (idx2 == hIdx);
+            Quote memory venue1 = cands[idx1];
+            Quote memory venue2 = cands[idx2];
+
+            uint256[5] memory pcts = [uint256(100), 75, 50, 25, 0];
+            uint256 bestTotal;
+            uint256 bestS;
+
+            for (uint256 s; s < 5; ++s) {
+                uint256 a1 = (swapAmount * pcts[s]) / 100;
+                uint256 a2 = swapAmount - a1;
+                uint256 o1_;
+                uint256 o2_;
+
+                if (a1 > 0) {
+                    o1_ = v1h
+                        ? _tryQuoteV4Hooked(
+                            tokenIn, tokenOut, a1, hookPoolFee, hookTickSpacing, hookAddress
+                        )
+                        : _requoteForSource(false, tokenIn, tokenOut, a1, venue1).amountOut;
+                }
+                if (a2 > 0) {
+                    o2_ = v2h
+                        ? _tryQuoteV4Hooked(
+                            tokenIn, tokenOut, a2, hookPoolFee, hookTickSpacing, hookAddress
+                        )
+                        : _requoteForSource(false, tokenIn, tokenOut, a2, venue2).amountOut;
+                }
+
+                uint256 t = o1_ + o2_;
+                if (t > bestTotal) {
+                    bestTotal = t;
+                    bestS = s;
+                }
+            }
+
+            // ---- Build winning split ----
+            uint256 fa1 = (swapAmount * pcts[bestS]) / 100;
+            uint256 fa2 = swapAmount - fa1;
+
+            if (fa1 == 0 || fa2 == 0) {
+                // 100/0 or 0/100 — single venue
+                uint256 winner = fa1 == 0 ? 1 : 0;
+                bool wh = winner == 0 ? v1h : v2h;
+                if (wh) {
+                    uint256 ho_ = _tryQuoteV4Hooked(
+                        tokenIn, tokenOut, swapAmount, hookPoolFee, hookTickSpacing, hookAddress
+                    );
+                    legs[winner] = Quote(AMM.V4_HOOKED, 0, swapAmount, ho_);
+                    uint256 lim = SlippageLib.limit(false, ho_, slippageBps);
+                    bytes[] memory c_ = new bytes[](1);
+                    c_[0] = _buildV4HookedCalldata(
+                        to,
+                        tokenIn,
+                        tokenOut,
+                        swapAmount,
+                        lim,
+                        deadline,
+                        hookPoolFee,
+                        hookTickSpacing,
+                        hookAddress
+                    );
+                    multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, c_);
+                    msgValue = ethIn ? swapAmount : 0;
+                } else {
+                    Quote memory v = winner == 0 ? venue1 : venue2;
+                    legs[winner] = _requoteForSource(false, tokenIn, tokenOut, swapAmount, v);
+                    (, bytes memory cd,, uint256 mv) = buildBestSwap(
+                        to, false, tokenIn, tokenOut, swapAmount, slippageBps, deadline
+                    );
+                    bytes[] memory c_ = new bytes[](1);
+                    c_[0] = cd;
+                    multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, c_);
+                    msgValue = mv;
+                }
+                return (legs, multicall, msgValue);
+            }
+
+            // ---- True split: build both legs ----
+            if (v1h) {
+                uint256 ho_ = _tryQuoteV4Hooked(
+                    tokenIn, tokenOut, fa1, hookPoolFee, hookTickSpacing, hookAddress
+                );
+                legs[0] = Quote(AMM.V4_HOOKED, 0, fa1, ho_);
+            } else {
+                legs[0] = _requoteForSource(false, tokenIn, tokenOut, fa1, venue1);
+            }
+            if (v2h) {
+                uint256 ho_ = _tryQuoteV4Hooked(
+                    tokenIn, tokenOut, fa2, hookPoolFee, hookTickSpacing, hookAddress
+                );
+                legs[1] = Quote(AMM.V4_HOOKED, 0, fa2, ho_);
+            } else {
+                legs[1] = _requoteForSource(false, tokenIn, tokenOut, fa2, venue2);
+            }
+
+            uint256 lim1 = SlippageLib.limit(false, legs[0].amountOut, slippageBps);
+            uint256 lim2 = SlippageLib.limit(false, legs[1].amountOut, slippageBps);
+
+            address legTo = ethIn ? ZROUTER : to;
+
+            // Curve legs with ETH input need a pre-wrap
+            bool wrapLeg1 = ethIn && !v1h && legs[0].source == AMM.CURVE;
+            bool wrapLeg2 = ethIn && !v2h && legs[1].source == AMM.CURVE;
+            uint256 nc = 2 + (ethIn ? 1 : 0) + (wrapLeg1 ? 1 : 0) + (wrapLeg2 ? 1 : 0);
+            bytes[] memory calls_ = new bytes[](nc);
+            uint256 ci;
+
+            // Leg 1
+            if (wrapLeg1) {
+                calls_[ci++] = abi.encodeWithSelector(IRouterExt.wrap.selector, fa1);
+            }
+            if (v1h) {
+                calls_[ci++] = _buildV4HookedCalldata(
+                    legTo,
+                    tokenIn,
+                    tokenOut,
+                    fa1,
+                    lim1,
+                    deadline,
+                    hookPoolFee,
+                    hookTickSpacing,
+                    hookAddress
+                );
+            } else {
+                calls_[ci++] = _buildCalldataFromBest(
+                    legTo, false, tokenIn, tokenOut, fa1, lim1, slippageBps, deadline, legs[0]
+                );
+            }
+
+            // Leg 2
+            if (wrapLeg2) {
+                calls_[ci++] = abi.encodeWithSelector(IRouterExt.wrap.selector, fa2);
+            }
+            if (v2h) {
+                calls_[ci++] = _buildV4HookedCalldata(
+                    legTo,
+                    tokenIn,
+                    tokenOut,
+                    fa2,
+                    lim2,
+                    deadline,
+                    hookPoolFee,
+                    hookTickSpacing,
+                    hookAddress
+                );
+            } else {
+                calls_[ci++] = _buildCalldataFromBest(
+                    legTo, false, tokenIn, tokenOut, fa2, lim2, slippageBps, deadline, legs[1]
+                );
+            }
+
+            // Final sweep for ETH input
+            if (ethIn) {
+                calls_[ci++] = _sweepTo(tokenOut, to);
+            }
+
+            multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, calls_);
+            msgValue = ethIn ? swapAmount : 0;
+        }
+    }
+
     /// @dev Re-quote for a specific AMM source at a given amount.
     function _requoteForSource(
         bool exactOut,
@@ -1257,7 +1572,28 @@ interface IStETH {
     function getTotalPooledEther() external view returns (uint256);
 }
 
-address constant ZROUTER = 0x0000000000001C3a3Aa8FDfca4f5c0c94583aC46;
+address constant ZROUTER = 0x000000000000FB114709235f1ccBFfb925F600e4;
+address constant V4_ROUTER = 0x00000000000044a361Ae3cAc094c9D1b14Eece97;
+
+struct IV4PoolKey {
+    address currency0;
+    address currency1;
+    uint24 fee;
+    int24 tickSpacing;
+    address hooks;
+}
+
+interface IV4Router {
+    function swapExactTokensForTokens(
+        uint256 amountIn,
+        uint256 amountOutMin,
+        bool zeroForOne,
+        IV4PoolKey calldata poolKey,
+        bytes calldata hookData,
+        address to,
+        uint256 deadline
+    ) external payable returns (int256);
+}
 
 interface IRouterExt {
     function unwrap(uint256 amount) external payable;
