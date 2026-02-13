@@ -1232,6 +1232,10 @@ contract zQuoter {
     // ====================== V4 HOOKED SPLIT ======================
 
     /// @dev Quote V4 hooked pool, returning 0 on failure.
+    ///      quoteV4 simulates raw AMM math only — it does NOT simulate the hook's
+    ///      afterSwap callback which can modify the swap delta (e.g. protocol fees).
+    ///      We reduce the output by the hook's afterSwap fee so that slippage limits
+    ///      and venue comparisons reflect the real post-fee amount.
     function _tryQuoteV4Hooked(
         address tokenIn,
         address tokenOut,
@@ -1239,13 +1243,17 @@ contract zQuoter {
         uint24 fee,
         int24 tick,
         address hook
-    ) internal view returns (uint256) {
+    ) internal view returns (uint256 out) {
         try this.quoteV4(false, tokenIn, tokenOut, fee, tick, hook, amount) returns (
             uint256, uint256 o
         ) {
-            return o;
+            out = o;
         } catch {
             return 0;
+        }
+        // PNKSTR hook: afterSwap takes 10% of output (feeBips=1000 stored in hook slot 0).
+        if (hook == 0xfAaad5B731F52cDc9746F2414c823eca9B06E844) {
+            out = (out * 9000) / 10000;
         }
     }
 

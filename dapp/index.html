@@ -607,7 +607,7 @@ body.dark .routes-list-item .best-badge { background: #e8e8e0; color: #0a0a0a; }
 body.dark .loading { border-color: #444; border-top-color: #0a0a0a; }
 body.dark .modal-overlay { background: rgba(0,0,0,0.85); }
 body.dark .modal { background: #111; border-color: #333; }
-body.dark .modal-close { color: #e8e8e0; }
+body.dark .modal-close { background: none; color: #fff; }
 body.dark .wallet-option { background: #111; border-color: #333; color: #e8e8e0; }
 body.dark .wallet-option:hover { background: #e8e8e0; color: #0a0a0a; }
 body.dark .token-list-item:hover { background: #1a1a1a; }
@@ -776,7 +776,7 @@ function toggleDark() {
 
 // ---- Constants ----
 const CHAIN_ID = 1;
-const ZQUOTER_ADDRESS = "0x980d025B989FA770d5A86947DB9248d30666652B";
+const ZQUOTER_ADDRESS = "0x0180Fe9Ae92Cd04dA670F974DE9d928EA69CfA66";
 const ZROUTER_ADDRESS = "0x000000000000FB114709235f1ccBFfb925F600e4";
 const USDC_ADDRESS = "0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48";
 const USDT_ADDRESS = "0xdAC17F958D2ee523a2206206994597C13D831ec7";
@@ -788,21 +788,14 @@ const PNKSTR_ADDRESS = "0xc50673EDb3A7b94E8CAD8a7d4E0cD68864E33eDF";
 const PERMIT2_ADDRESS = "0x000000000022D473030F116dDEE9F6B43aC78BA3";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
 const WEINS_ADDRESS = "0x0000000000696760E15f265e828DB644A0c242EB";
-const V4_ROUTER_ADDRESS = "0x00000000000044a361Ae3cAc094c9D1b14Eece97";
 const PNKSTR_HOOK_ADDRESS = "0xfAaad5B731F52cDc9746F2414c823eca9B06E844";
 const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11";
 const WEINS_ABI = ["function computeId(string) pure returns (uint256)", "function text(uint256,string) view returns (string)", "function contenthash(uint256) view returns (bytes)", "function reverseResolve(address) view returns (string)"];
 const IPFS_GATEWAYS = ["https://content.wrappr.wtf/ipfs/", "https://dweb.link/ipfs/"];
+const BUILTIN_ADDRS = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS].map(a => a.toLowerCase()));
 
 // ---- DOM helpers ----
 const $ = id => document.getElementById(id);
-
-function escapeHtml(str) {
-  str = String(str ?? '');
-  return str.replace(/[&<>"']/g, c => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
-  }[c]));
-}
 
 function setText(id, s) {
   const el = typeof id === 'string' ? $(id) : id;
@@ -965,10 +958,10 @@ function renderWalletModal(wallets) {
     const displayName = $('walletBtn').textContent;
     const showName = displayName && displayName !== 'connect' && !displayName.startsWith('0x');
     container.innerHTML = `
-      <div style="padding: 12px; border: 1px solid #000; margin-bottom: 12px;">
+      <div style="padding: 12px; border: 1px solid currentColor; margin-bottom: 12px;">
         <div style="font-weight: 600; margin-bottom: 6px;">Connected</div>
-        ${showName ? `<div style="font-size: 16px; margin-bottom: 4px;">${escapeHtml(displayName)}</div>` : ''}
-        <div style="font-size: 12px; word-break: break-all; opacity: 0.6;">${escapeHtml(connectedAddress)}</div>
+        ${showName ? `<div style="font-size: 16px; margin-bottom: 4px;">${escText(displayName)}</div>` : ''}
+        <div style="font-size: 12px; word-break: break-all; opacity: 0.6;">${escText(connectedAddress)}</div>
       </div>
       <div class="wallet-option disconnect" onclick="disconnectWallet()">
         <span class="wallet-option-name">Disconnect</span>
@@ -978,7 +971,7 @@ function renderWalletModal(wallets) {
     container.innerHTML = wallets.length > 0 ? wallets.map(w => `
       <div class="wallet-option" data-wallet-key="${escAttr(w.key)}">
         <span class="wallet-option-icon">${w.icon}</span>
-        <span class="wallet-option-name">${escapeHtml(w.name)}</span>
+        <span class="wallet-option-name">${escText(w.name)}</span>
       </div>
     `).join('') : '<div style="padding:12px;text-align:center;">No wallets detected.</div>';
     container.querySelectorAll('[data-wallet-key]').forEach(el => {
@@ -1004,7 +997,7 @@ async function wcTransaction(txPromise, message = 'Confirm in your wallet app') 
   notif.id = 'wcNotif';
   notif.innerHTML = `
     <div style="position:fixed;top:0;left:0;right:0;background:#1a1a2e;color:#fff;padding:16px;text-align:center;z-index:10000;font-size:14px;">
-      <div style="margin-bottom:8px;">📱 ${escapeHtml(message)}</div>
+      <div style="margin-bottom:8px;">📱 ${escText(message)}</div>
       <div style="font-size:12px;opacity:0.7;">Open your wallet app to approve the transaction</div>
       ${wcDeepLink && /^https?:\/\//i.test(wcDeepLink) ? `<a href="${escAttr(wcDeepLink)}" style="display:inline-block;margin-top:8px;padding:8px 16px;background:#fff;color:#000;border-radius:4px;text-decoration:none;">Open Wallet</a>` : ''}
     </div>
@@ -1184,7 +1177,13 @@ async function connectWithWallet(walletKey) {
     connectedWalletProvider = walletProvider;
     updateWalletDisplay();
 
-    // Store handlers for cleanup
+    // Clean up any previous listeners before adding new ones
+    if (connectedWalletProvider && walletEventHandlers) {
+      try {
+        connectedWalletProvider.removeListener('accountsChanged', walletEventHandlers.accountsChanged);
+        connectedWalletProvider.removeListener('chainChanged', walletEventHandlers.chainChanged);
+      } catch (e) {}
+    }
     walletEventHandlers = {
       accountsChanged: () => window.location.reload(),
       chainChanged: () => window.location.reload()
@@ -1251,7 +1250,7 @@ function updateWalletDisplay() {
   updateWcBanner();
   // Resolve .wei name in background
   quoteRPC.call(async (rpc) => {
-    const ns = new ethers.Contract(WEINS_ADDRESS, WEINS_ABI, rpc);
+    const ns = getWeinsContract(rpc);
     const name = await ns.reverseResolve(connectedAddress);
     if (name && connectedAddress) $('walletBtn').textContent = name.toLowerCase();
   }).catch(() => {});
@@ -1392,7 +1391,7 @@ function validateTokenList(rawArray) {
 }
 
 function mergeWeiListTokens(listName, validated) {
-  const builtInAddrs = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS].map(a => a.toLowerCase()));
+  const builtInAddrs = BUILTIN_ADDRS;
   for (const t of validated) {
     if (builtInAddrs.has(t.address.toLowerCase())) continue;
     let sym = t.symbol;
@@ -1471,7 +1470,7 @@ async function resolveWeiList(nameInput) {
   try {
     // Read both contenthash and text record in parallel
     const { ch, txt } = await quoteRPC.call(async (rpc) => {
-      const ns = new ethers.Contract(WEINS_ADDRESS, WEINS_ABI, rpc);
+      const ns = getWeinsContract(rpc);
       const tokenId = await ns.computeId(fullName);
       const [ch, txt] = await Promise.all([
         ns.contenthash(tokenId).catch(() => '0x'),
@@ -1561,7 +1560,7 @@ function renderTokenList(filter) {
   const frag = document.createDocumentFragment();
   const q = (filter || '').toLowerCase().trim();
 
-  const builtInAddrs = new Set([ZERO_ADDRESS, USDC_ADDRESS, USDT_ADDRESS, WBTC_ADDRESS, WSTETH_ADDRESS, RETH_ADDRESS, DAI_ADDRESS, PNKSTR_ADDRESS].map(a => a.toLowerCase()));
+  const builtInAddrs = BUILTIN_ADDRS;
 
   function matchesFilter(sym, addr) {
     if (!q) return true;
@@ -1602,12 +1601,19 @@ function renderTokenList(filter) {
     hasAny = true;
   }
 
+  // Pre-index weiListTokenSource by list name (O(n) instead of O(n*m))
+  const _weiByList = new Map();
+  for (const [sym, src] of weiListTokenSource) {
+    if (!tokens[sym]) continue;
+    if (!_weiByList.has(src)) _weiByList.set(src, []);
+    _weiByList.get(src).push(sym);
+  }
+
   // Per-.wei-list groups
   for (const [listName] of weiLists) {
+    const srcTokens = _weiByList.get(listName) || [];
     const listTokens = [];
-    for (const [sym, src] of weiListTokenSource) {
-      if (src !== listName) continue;
-      if (!tokens[sym]) continue;
+    for (const sym of srcTokens) {
       if (!matchesFilter(sym, tokens[sym].address)) continue;
       listTokens.push(sym);
     }
@@ -1661,9 +1667,10 @@ function initTokenSearch() {
   const input = $('tokenSearchInput');
   if (!input) return;
 
+  const debouncedRender = debounce((val) => renderTokenList(val), 150);
   input.addEventListener('input', () => {
     const val = input.value.trim();
-    renderTokenList(val);
+    debouncedRender(val);
     clearTimeout(_weiDebounceTimer);
     if (val.endsWith('.wei') && val.length > 4) {
       _weiDebounceTimer = setTimeout(() => resolveWeiList(val), 800);
@@ -1717,7 +1724,7 @@ function iconForSymbol(sym) {
   const s = String(sym);
   if (ICONS[s]) return ICONS[s];
   const t = tokens[s];
-  if (t?.icon) return `<img src="${escAttr(t.icon)}" width="24" height="24" style="border-radius:50%" alt="${escAttr(s)}">`;
+  if (t?.icon) return `<img src="${escAttr(t.icon)}" width="24" height="24" style="border-radius:50%" alt="${escAttr(s)}" onerror="this.outerHTML=makeLetterIcon('${escAttr(s)}')">`;
   if (_letterIconCache.has(s)) return _letterIconCache.get(s);
   const svg = makeLetterIcon(s);
   _letterIconCache.set(s, svg);
@@ -2225,7 +2232,7 @@ async function updateBalances() {
 // ---- AMM names ----
 const AMM_NAMES = {
   0: "Uniswap V2", 1: "SushiSwap", 2: "zAMM",
-  3: "Uniswap V3", 4: "Uniswap V4", 5: "Curve",
+  3: "Uniswap V3", 4: "Uniswap V4", 5: "Curve", 8: "V4 Hooked",
   6: "Lido", 7: "WETH Wrap", 8: "V4 Hooked",
 };
 
@@ -2237,9 +2244,6 @@ const QUOTER_IFACE = new ethers.Interface([
   "function quoteCurve(bool exactOut,address tokenIn,address tokenOut,uint256 swapAmount,uint256 maxCandidates) view returns (uint256 amountIn,uint256 amountOut,address bestPool,bool usedUnderlying,bool usedStable,uint8 iIndex,uint8 jIndex)",
   "function quoteV4(bool,address,address,uint24,int24,address,uint256) view returns (uint256 amountIn, uint256 amountOut)",
   "function buildSplitSwapHooked(address to,address tokenIn,address tokenOut,uint256 swapAmount,uint256 slippageBps,uint256 deadline,uint24 hookPoolFee,int24 hookTickSpacing,address hookAddress) view returns (tuple(uint8 source,uint256 feeBps,uint256 amountIn,uint256 amountOut)[2] legs, bytes multicall, uint256 msgValue)",
-]);
-const V4_SWAP_IFACE = new ethers.Interface([
-  "function swapExactTokensForTokens(uint256,uint256,bool,(address,address,uint24,int24,address),bytes,address,uint256) payable returns (int256)",
 ]);
 const ROUTER_IFACE = new ethers.Interface([
   "function deposit(address,uint256,uint256) payable",
@@ -2482,43 +2486,17 @@ function getReceiver() {
   return connectedAddress;
 }
 
-async function getV4HookedQuote(rpc, amountIn, fromAddr, toAddr, receiver, deadline, slipBps) {
-  // Only activate for ETH→PNKSTR (ERC20 input hits Unauthorized on V4_ROUTER)
-  const isETHToPNKSTR = fromAddr === ZERO_ADDRESS && toAddr.toLowerCase() === PNKSTR_ADDRESS.toLowerCase();
-  if (!isETHToPNKSTR) return null;
-
-  // Quote via zQuoter.quoteV4 — a view function, no ETH/token balance needed.
-  // PNKSTR pool: fee=0 (hook-managed dynamic fee), tickSpacing=60.
-  // quoteV4 reads the current dynamic fee from slot0.lpFee (set by the hook via
-  // updateDynamicLPFee) and uses it in SwapMath.computeSwapStep, so the ~10% hook
-  // tax is reflected in the quote. No ERC20 transfer tax on PNKSTR itself.
-  const quoter = new ethers.Contract(ZQUOTER_ADDRESS, QUOTER_IFACE, rpc);
-
-  let amountOut;
-  try {
-    const result = await quoter.quoteV4(
-      false, fromAddr, toAddr, 0, 60, PNKSTR_HOOK_ADDRESS, amountIn
-    );
-    amountOut = result.amountOut;
-    if (amountOut <= 0n) return null;
-  } catch (e) {
-    console.warn("V4 hooked quote failed:", e);
-    return null;
-  }
-
-  // Build execution calldata via execute(V4_ROUTER) with slippage
-  const poolKey = [ZERO_ADDRESS, PNKSTR_ADDRESS, 0, 60, PNKSTR_HOOK_ADDRESS];
-  const amountOutMin = amountOut * (10000n - BigInt(slipBps)) / 10000n;
-  const execSwapData = V4_SWAP_IFACE.encodeFunctionData("swapExactTokensForTokens", [
-    amountIn, amountOutMin, true, poolKey, "0x", receiver, deadline
-  ]);
-  const executeCall = ROUTER_IFACE.encodeFunctionData("execute", [V4_ROUTER_ADDRESS, amountIn, execSwapData]);
-  const multicall = ROUTER_IFACE.encodeFunctionData("multicall", [[executeCall]]);
-
-  return { amountOut, multicall, msgValue: amountIn };
+// Cache contract instances per provider to avoid repeated construction
+const _contractCache = new WeakMap();
+function _getCached(rpc, addr, abi) {
+  let m = _contractCache.get(rpc);
+  if (!m) { m = new Map(); _contractCache.set(rpc, m); }
+  let c = m.get(addr);
+  if (!c) { c = new ethers.Contract(addr, abi, rpc); m.set(addr, c); }
+  return c;
 }
-
-
+function getQuoterContract(rpc) { return _getCached(rpc, ZQUOTER_ADDRESS, QUOTER_IFACE); }
+function getWeinsContract(rpc) { return _getCached(rpc, WEINS_ADDRESS, WEINS_ABI); }
 
 async function getQuote(fromAmountStr, fromSym, toSym) {
   if (!connectedAddress) throw new Error("Connect wallet to get a quote");
@@ -2532,7 +2510,7 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
   const deadline = BigInt(Math.trunc(Date.now() / 1000) + 300);
 
   return await quoteRPC.call(async (rpc) => {
-    const quoter = new ethers.Contract(ZQUOTER_ADDRESS, QUOTER_IFACE, rpc);
+    const quoter = getQuoterContract(rpc);
     const callOpts = { blockTag: "latest" };
 
     // Fire all calls in parallel (V4 hooked only for PNKSTR swaps)
@@ -2552,14 +2530,13 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       quoter.quoteCurve(false, fromData.address, toData.address, amountIn, 8, callOpts),
     ];
     if (isPNKSTR) {
-      allCalls.push(getV4HookedQuote(rpc, amountIn, fromData.address, toData.address, receiver, deadline, slippageBps));
       allCalls.push(quoter.buildSplitSwapHooked(
         receiver, fromData.address, toData.address,
         amountIn, BigInt(slippageBps), deadline,
         0, 60, PNKSTR_HOOK_ADDRESS, callOpts
       ));
     }
-    const [bestResult, splitResult, quotesResult, curveResult, v4HookedResult, v4SplitResult] = await Promise.allSettled(allCalls);
+    const [bestResult, splitResult, quotesResult, curveResult, v4SplitResult] = await Promise.allSettled(allCalls);
 
     // bestResult is required
     if (bestResult.status === 'rejected') throw bestResult.reason;
@@ -2619,44 +2596,39 @@ async function getQuote(fromAmountStr, fromSym, toSym) {
       }
     }
 
-    // Check if V4 hooked pool beats current best
-    if (v4HookedResult?.status === 'fulfilled' && v4HookedResult.value) {
-      const v4 = v4HookedResult.value;
-      if (v4.amountOut > 0n) {
-        if (result.allQuotes) {
-          result.allQuotes.push({ source: "V4 Hooked", sourceId: 8, feeBps: 1000n, amountIn, amountOut: v4.amountOut });
-        }
-        if (v4.amountOut > result.expectedOutput) {
-          result.expectedOutput = v4.amountOut;
-          result.multicall = v4.multicall;
-          result.msgValue = v4.msgValue;
-          result.sourceA = "V4 Hooked";
-          result.sourceB = null;
-          result.isTwoHop = false;
-          result.isSplit = false;
-          result.splitLegs = null;
-          result.calls = null;
-        }
-      }
-    }
-
-    // Check if V4 hooked split (standard venue + hooked pool) beats current best
+    // Check if V4 hooked split/single (contract-built calldata) beats current best
     if (v4SplitResult?.status === 'fulfilled' && v4SplitResult.value) {
       const hs = v4SplitResult.value;
       const hsTotal = hs.legs[0].amountOut + hs.legs[1].amountOut;
-      if (hsTotal > result.expectedOutput && hs.legs[0].amountOut > 0n && hs.legs[1].amountOut > 0n) {
+      const isTrueSplit = hs.legs[0].amountOut > 0n && hs.legs[1].amountOut > 0n;
+      const activeLeg = hs.legs[0].amountOut > 0n ? hs.legs[0] : hs.legs[1];
+
+      // Add V4 hooked quote to allQuotes if a hooked leg exists
+      if (result.allQuotes && hsTotal > 0n && activeLeg.source === 8) {
+        result.allQuotes.push({ source: "V4 Hooked", sourceId: 8, feeBps: activeLeg.feeBps, amountIn, amountOut: hsTotal });
+      }
+
+      if (hsTotal > result.expectedOutput && hsTotal > 0n) {
         result.expectedOutput = hsTotal;
         result.multicall = hs.multicall;
         result.msgValue = hs.msgValue ?? 0n;
-        result.isSplit = true;
-        result.isTwoHop = false;
-        result.sourceA = AMM_NAMES[hs.legs[0].source] || "Unknown";
-        result.sourceB = null;
-        result.splitLegs = [
-          { source: AMM_NAMES[hs.legs[0].source] || "Unknown", amountIn: hs.legs[0].amountIn, amountOut: hs.legs[0].amountOut, feeBps: hs.legs[0].feeBps },
-          { source: AMM_NAMES[hs.legs[1].source] || "Unknown", amountIn: hs.legs[1].amountIn, amountOut: hs.legs[1].amountOut, feeBps: hs.legs[1].feeBps },
-        ];
         result.calls = null;
+        if (isTrueSplit) {
+          result.isSplit = true;
+          result.isTwoHop = false;
+          result.sourceA = AMM_NAMES[hs.legs[0].source] || "Unknown";
+          result.sourceB = null;
+          result.splitLegs = [
+            { source: AMM_NAMES[hs.legs[0].source] || "Unknown", amountIn: hs.legs[0].amountIn, amountOut: hs.legs[0].amountOut, feeBps: hs.legs[0].feeBps },
+            { source: AMM_NAMES[hs.legs[1].source] || "Unknown", amountIn: hs.legs[1].amountIn, amountOut: hs.legs[1].amountOut, feeBps: hs.legs[1].feeBps },
+          ];
+        } else {
+          result.isSplit = false;
+          result.isTwoHop = false;
+          result.sourceA = AMM_NAMES[activeLeg.source] || "V4 Hooked";
+          result.sourceB = null;
+          result.splitLegs = null;
+        }
       }
     }
 
@@ -2705,7 +2677,7 @@ function displayAllRoutes(quote, toSym) {
 
 // ---- Price impact via spot rate ----
 const _spotCache = new Map();
-const _spotTTL = 30_000;
+const _spotTTL = 60_000;
 
 function _spotKey(tokenIn, tokenOut) {
   return `${tokenIn.toLowerCase()}:${tokenOut.toLowerCase()}`;
@@ -2723,11 +2695,11 @@ async function getSpotRate(fromSym, toSym) {
 
   try {
     const spotRate = await quoteRPC.call(async (rpc) => {
-      const quoter = new ethers.Contract(ZQUOTER_ADDRESS, QUOTER_IFACE, rpc);
+      const quoter = getQuoterContract(rpc);
       const q = await quoter.getQuotes(false, fromData.address, toData.address, refAmount, { blockTag: "latest" });
       if (q.best.amountOut === 0n || q.best.amountIn === 0n) return null;
-      // Rate = amountOut / amountIn (both as BigInt, compute as float)
-      return Number(q.best.amountOut) / Number(q.best.amountIn);
+      // Store raw BigInts to avoid precision loss in Number conversion
+      return { num: q.best.amountOut, den: q.best.amountIn };
     });
     if (spotRate != null) {
       _spotCache.set(key, { rate: spotRate, t: Date.now() });
@@ -2746,17 +2718,21 @@ async function displayPriceImpact(amtStr, fromSym, toSym, quote) {
   try {
     const fromData = tokens[fromSym], toData = tokens[toSym];
     const amountIn = safeParseUnits(amtStr, fromData.decimals);
-    const executionRate = Number(quote.expectedOutput) / Number(amountIn);
 
     const spotRate = await getSpotRate(fromSym, toSym);
     if (seq !== _quoteSeq) return; // stale — newer quote already in flight
-    if (spotRate == null || spotRate === 0) {
+    if (spotRate == null || spotRate.den === 0n) {
       el.textContent = '--';
       el.className = '';
       return;
     }
 
-    const impact = (1 - executionRate / spotRate) * 100;
+    // impact = (1 - execRate/spotRate) * 100
+    // execRate = expectedOutput / amountIn, spotRate = num / den
+    // impact = (1 - (expectedOutput * den) / (amountIn * num)) * 100
+    const SCALE = 10n ** 18n;
+    const ratio = (quote.expectedOutput * spotRate.den * SCALE) / (amountIn * spotRate.num);
+    const impact = Number(SCALE - ratio) * 100 / Number(SCALE);
     const displayImpact = Math.max(0, impact);
     el.textContent = displayImpact < 0.01 ? '<0.01%' : displayImpact.toFixed(2) + '%';
 
@@ -3124,31 +3100,32 @@ document.addEventListener("keydown", (e) => {
 
 // ---- Init ----
 document.addEventListener("DOMContentLoaded", () => {
-  loadWeiLists();
   updateTokenDisplay();
   initTokenListClick();
   initTokenSearch();
   const fromEl = $("fromAmount");
   if (fromEl) fromEl.addEventListener("input", debounce(handleAmountChange, 400));
+  // Defer heavy localStorage parsing until after first render
+  (window.requestIdleCallback || setTimeout)(() => loadWeiLists());
 });
 
 // Swap button click
 $("swapBtn").addEventListener("click", executeSwap);
 
-// ---- Auto-reconnect ----
-window.addEventListener("load", async () => {
-  try {
-    const savedWallet = localStorage.getItem('zswap_wallet');
-    if (savedWallet) {
-      // Wait a moment for EIP-6963 providers to announce
-      await new Promise(r => setTimeout(r, 300));
+// ---- Auto-reconnect (non-blocking) ----
+window.addEventListener("load", () => {
+  const savedWallet = localStorage.getItem('zswap_wallet');
+  if (!savedWallet) return;
+  // Fire-and-forget: don't block page interactivity
+  setTimeout(async () => {
+    try {
       window.dispatchEvent(new Event('eip6963:requestProvider'));
-      await new Promise(r => setTimeout(r, 200));
+      await new Promise(r => setTimeout(r, 300));
       await connectWithWallet(savedWallet);
+    } catch (e) {
+      console.error("Auto-reconnect failed:", e);
     }
-  } catch (e) {
-    console.error("Auto-reconnect failed:", e);
-  }
+  }, 100);
 });
 
 </script>

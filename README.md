@@ -20,7 +20,7 @@ Features:
 
 Deployed to Ethereum: [0x000000000000FB114709235f1ccBFfb925F600e4](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4#code)
 
-Router helper (`zQuoter`) deployed to [0x980d025B989FA770d5A86947DB9248d30666652B](https://etherscan.io/address/0x980d025B989FA770d5A86947DB9248d30666652B#code) on Ethereum.
+Router helper (`zQuoter`) deployed to [0x0180Fe9Ae92Cd04dA670F974DE9d928EA69CfA66](https://etherscan.io/address/0x0180Fe9Ae92Cd04dA670F974DE9d928EA69CfA66#code) on Ethereum.
 
 And [0x772E2810A471dB2CC7ADA0d37D6395476535889a](https://basescan.org/address/0x772E2810A471dB2CC7ADA0d37D6395476535889a#code) on Base.
 

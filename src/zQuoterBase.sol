@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.30;
 
-contract zQuoter {
+contract zQuoterBase {
     enum AMM {
         UNI_V2,
         SUSHI,
@@ -70,11 +70,7 @@ contract zQuoter {
         }
     }
 
-    function _pickBest(bool exactOut, Quote[] memory qs)
-        internal
-        pure
-        returns (Quote memory best)
-    {
+    function _pickBest(bool exactOut, Quote[] memory qs) internal pure returns (Quote memory best) {
         unchecked {
             bool init;
             for (uint256 i; i != qs.length; ++i) {
@@ -159,31 +155,37 @@ contract zQuoter {
                 tIn < tOut ? MIN_SQRT_RATIO_PLUS_ONE : MAX_SQRT_RATIO_MINUS_ONE;
 
             if (!exactOut) {
-                try IQuoter(V3_QUOTER).quoteExactInputSingleWithPool(
-                    IQuoter.QuoteExactInputSingleWithPoolParams({
-                        tokenIn: tIn,
-                        tokenOut: tOut,
-                        amountIn: swapAmount,
-                        fee: fee,
-                        pool: pool,
-                        sqrtPriceLimitX96: sqrtPriceLimitX96
-                    })
-                ) returns (uint256 amtOut, uint160, uint32, uint256) {
+                try IQuoter(V3_QUOTER)
+                    .quoteExactInputSingleWithPool(
+                        IQuoter.QuoteExactInputSingleWithPoolParams({
+                            tokenIn: tIn,
+                            tokenOut: tOut,
+                            amountIn: swapAmount,
+                            fee: fee,
+                            pool: pool,
+                            sqrtPriceLimitX96: sqrtPriceLimitX96
+                        })
+                    ) returns (
+                    uint256 amtOut, uint160, uint32, uint256
+                ) {
                     return (swapAmount, amtOut);
                 } catch {
                     return (0, 0);
                 }
             } else {
-                try IQuoter(V3_QUOTER).quoteExactOutputSingleWithPool(
-                    IQuoter.QuoteExactOutputSingleWithPoolParams({
-                        tokenIn: tIn,
-                        tokenOut: tOut,
-                        amount: swapAmount,
-                        fee: fee,
-                        pool: pool,
-                        sqrtPriceLimitX96: sqrtPriceLimitX96
-                    })
-                ) returns (uint256 amtIn, uint160, uint32, uint256) {
+                try IQuoter(V3_QUOTER)
+                    .quoteExactOutputSingleWithPool(
+                        IQuoter.QuoteExactOutputSingleWithPoolParams({
+                            tokenIn: tIn,
+                            tokenOut: tOut,
+                            amount: swapAmount,
+                            fee: fee,
+                            pool: pool,
+                            sqrtPriceLimitX96: sqrtPriceLimitX96
+                        })
+                    ) returns (
+                    uint256 amtIn, uint160, uint32, uint256
+                ) {
                     return (amtIn, swapAmount);
                 } catch {
                     return (0, 0);
@@ -239,14 +241,13 @@ contract zQuoter {
                 uint160 sqrtPriceNextX96 = TickMath.getSqrtPriceAtTick(tickNext);
 
                 // step within current tick (or to the limit)
-                (uint160 sqrtPriceNext, uint256 stepIn, uint256 stepOut, uint256 feeAmt) = SwapMath
-                    .computeSwapStep(
+                (uint160 sqrtPriceNext, uint256 stepIn, uint256 stepOut, uint256 feeAmt) = SwapMath.computeSwapStep(
                     sqrtPriceX96,
-                    (
-                        zeroForOne
+                    (zeroForOne
                             ? (sqrtPriceNextX96 < sqrtPriceLimitX96)
-                            : (sqrtPriceNextX96 > sqrtPriceLimitX96)
-                    ) ? sqrtPriceLimitX96 : sqrtPriceNextX96,
+                            : (sqrtPriceNextX96 > sqrtPriceLimitX96))
+                        ? sqrtPriceLimitX96
+                        : sqrtPriceNextX96,
                     liquidity,
                     amountRemaining,
                     protocolFee + lpFee
@@ -542,8 +543,9 @@ contract zQuoter {
             amountLimit = SlippageLib.limit(exactOut, quoted, slippageBps);
 
             if (best.source == AMM.UNI_V2) {
-                callData =
-                    _buildV2Swap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline);
+                callData = _buildV2Swap(
+                    to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline
+                );
             } else if (best.source == AMM.SUSHI) {
                 callData = _buildV2Swap(
                     to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, type(uint256).max
@@ -629,11 +631,7 @@ contract zQuoter {
         uint256 swapAmount, // exactIn: amount of tokenIn; exactOut: desired tokenOut
         uint256 slippageBps, // per-leg bound
         uint256 deadline
-    )
-        public
-        view
-        returns (Quote memory a, Quote memory b, bytes[] memory calls, uint256 msgValue)
-    {
+    ) public view returns (Quote memory a, Quote memory b, bytes[] memory calls, uint256 msgValue) {
         unchecked {
             require(swapAmount != 0, ZeroAmount());
 
@@ -800,8 +798,9 @@ contract zQuoter {
     ) internal pure returns (bytes memory callData) {
         unchecked {
             if (q.source == AMM.UNI_V2) {
-                callData =
-                    _buildV2Swap(to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline);
+                callData = _buildV2Swap(
+                    to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, deadline
+                );
             } else if (q.source == AMM.SUSHI) {
                 callData = _buildV2Swap(
                     to, exactOut, tokenIn, tokenOut, swapAmount, amountLimit, type(uint256).max
@@ -1350,11 +1349,10 @@ library TickMath {
             //     or price = int(2**128 / sqrt(1.0001)) if (absTick & 0x1) else 1 << 128
             uint256 price;
             assembly ("memory-safe") {
-                price :=
-                    xor(
-                        shl(128, 1),
-                        mul(xor(shl(128, 1), 0xfffcb933bd6fad37aa2d162d1a594001), and(absTick, 0x1))
-                    )
+                price := xor(
+                    shl(128, 1),
+                    mul(xor(shl(128, 1), 0xfffcb933bd6fad37aa2d162d1a594001), and(absTick, 0x1))
+                )
             }
             if (absTick & 0x2 != 0) price = (price * 0xfff97272373d413259a46990580e213a) >> 128;
             if (absTick & 0x4 != 0) price = (price * 0xfff2e50f5f656932ef12357cf3c7fdcc) >> 128;
@@ -1657,7 +1655,8 @@ library CustomRevert {
             // Encode wrapped error selector, address, function selector, offset, additional context, size, revert reason
             mstore(fmp, wrappedErrorSelector)
             mstore(
-                add(fmp, 0x04), and(revertingContract, 0xffffffffffffffffffffffffffffffffffffffff)
+                add(fmp, 0x04),
+                and(revertingContract, 0xffffffffffffffffffffffffffffffffffffffff)
             )
             mstore(
                 add(fmp, 0x24),
@@ -1764,7 +1763,7 @@ library SwapMath {
                     // `amountIn` is capped by the target price
                     sqrtPriceNextX96 = sqrtPriceTargetX96;
                     feeAmount = _feePips == MAX_SWAP_FEE
-                        ? amountIn // amountIn is always 0 here, as amountRemainingLessFee == 0 and amountRemainingLessFee >= amountIn
+                        ? amountIn  // amountIn is always 0 here, as amountRemainingLessFee == 0 and amountRemainingLessFee >= amountIn
                         : FullMath.mulDivRoundingUp(amountIn, _feePips, MAX_SWAP_FEE - _feePips);
                 } else {
                     // exhaust the remaining amount
@@ -2044,19 +2043,17 @@ library SqrtPriceMath {
         // if we're adding (subtracting), rounding down requires rounding the quotient down (up)
         // in both cases, avoid a mulDiv for most inputs
         if (add) {
-            uint256 quotient = (
-                amount <= type(uint160).max
+            uint256 quotient =
+                (amount <= type(uint160).max
                     ? (amount << FixedPoint96.RESOLUTION) / liquidity
-                    : FullMath.mulDiv(amount, FixedPoint96.Q96, liquidity)
-            );
+                    : FullMath.mulDiv(amount, FixedPoint96.Q96, liquidity));
 
             return (uint256(sqrtPX96) + quotient).toUint160();
         } else {
-            uint256 quotient = (
-                amount <= type(uint160).max
+            uint256 quotient =
+                (amount <= type(uint160).max
                     ? UnsafeMath.divRoundingUp(amount << FixedPoint96.RESOLUTION, liquidity)
-                    : FullMath.mulDivRoundingUp(amount, FixedPoint96.Q96, liquidity)
-            );
+                    : FullMath.mulDivRoundingUp(amount, FixedPoint96.Q96, liquidity));
 
             // equivalent: if (sqrtPX96 <= quotient) revert NotEnoughLiquidity();
             assembly ("memory-safe") {
@@ -2229,8 +2226,10 @@ library SqrtPriceMath {
     {
         unchecked {
             return liquidity < 0
-                ? getAmount0Delta(sqrtPriceAX96, sqrtPriceBX96, uint128(-liquidity), false).toInt256()
-                : -getAmount0Delta(sqrtPriceAX96, sqrtPriceBX96, uint128(liquidity), true).toInt256();
+                ? getAmount0Delta(sqrtPriceAX96, sqrtPriceBX96, uint128(-liquidity), false)
+                    .toInt256()
+                : -getAmount0Delta(sqrtPriceAX96, sqrtPriceBX96, uint128(liquidity), true)
+                    .toInt256();
         }
     }
 
@@ -2246,8 +2245,10 @@ library SqrtPriceMath {
     {
         unchecked {
             return liquidity < 0
-                ? getAmount1Delta(sqrtPriceAX96, sqrtPriceBX96, uint128(-liquidity), false).toInt256()
-                : -getAmount1Delta(sqrtPriceAX96, sqrtPriceBX96, uint128(liquidity), true).toInt256();
+                ? getAmount1Delta(sqrtPriceAX96, sqrtPriceBX96, uint128(-liquidity), false)
+                    .toInt256()
+                : -getAmount1Delta(sqrtPriceAX96, sqrtPriceBX96, uint128(liquidity), true)
+                    .toInt256();
         }
     }
 }
