@@ -191,6 +191,19 @@ contract zQuoter {
 
     // ====================== QUOTE (auto-discover via MetaRegistry) ======================
 
+    // Accumulator for 2-hop hub routing
+    struct HubPlan {
+        bool found;
+        bool isExactOut;
+        address mid;
+        Quote a;
+        Quote b;
+        bytes ca;
+        bytes cb;
+        uint256 scoreIn;
+        uint256 scoreOut;
+    }
+
     // Accumulator for 3-hop route discovery
     struct Route3 {
         bool found;
@@ -467,6 +480,54 @@ contract zQuoter {
         tokenIn = _normalizeETH(tokenIn);
         tokenOut = _normalizeETH(tokenOut);
 
+        // ---------- ETH <-> WETH (1:1, no slippage) ----------
+        if (
+            (tokenIn == address(0) && tokenOut == WETH)
+                || (tokenIn == WETH && tokenOut == address(0))
+        ) {
+            require(swapAmount != 0, ZeroAmount());
+            best = _asQuote(AMM.WETH_WRAP, swapAmount, swapAmount);
+            amountLimit = swapAmount; // 1:1, no slippage
+
+            if (tokenIn == address(0)) {
+                // ETH -> WETH
+                msgValue = swapAmount;
+                if (to == ZROUTER) {
+                    callData = abi.encodeWithSelector(IRouterExt.wrap.selector, swapAmount);
+                } else {
+                    bytes[] memory c = new bytes[](2);
+                    c[0] = abi.encodeWithSelector(IRouterExt.wrap.selector, swapAmount);
+                    c[1] = abi.encodeWithSelector(
+                        IRouterExt.sweep.selector, WETH, uint256(0), swapAmount, to
+                    );
+                    callData = abi.encodeWithSelector(IRouterExt.multicall.selector, c);
+                }
+            } else {
+                // WETH -> ETH
+                msgValue = 0;
+                if (to == ZROUTER) {
+                    bytes[] memory c = new bytes[](2);
+                    c[0] = abi.encodeWithSelector(
+                        IRouterExt.deposit.selector, WETH, uint256(0), swapAmount
+                    );
+                    c[1] = abi.encodeWithSelector(IRouterExt.unwrap.selector, swapAmount);
+                    callData = abi.encodeWithSelector(IRouterExt.multicall.selector, c);
+                } else {
+                    bytes[] memory c = new bytes[](3);
+                    c[0] = abi.encodeWithSelector(
+                        IRouterExt.deposit.selector, WETH, uint256(0), swapAmount
+                    );
+                    c[1] = abi.encodeWithSelector(IRouterExt.unwrap.selector, swapAmount);
+                    c[2] = abi.encodeWithSelector(
+                        IRouterExt.sweep.selector, address(0), uint256(0), swapAmount, to
+                    );
+                    callData = abi.encodeWithSelector(IRouterExt.multicall.selector, c);
+                }
+            }
+            return (best, callData, amountLimit, msgValue);
+        }
+
+        // ---------- Normal path ----------
         // Single unified quote across all sources (V2/Sushi/V3/V4/ZAMM/Curve/Lido)
         best = _quoteBestSingleHop(exactOut, tokenIn, tokenOut, swapAmount);
         if (best.amountIn == 0 && best.amountOut == 0) revert NoRoute();
@@ -555,6 +616,9 @@ contract zQuoter {
             tokenIn = _normalizeETH(tokenIn);
             tokenOut = _normalizeETH(tokenOut);
 
+            // Prevent stealable leftovers: if refundTo is the router itself, coerce to `to`.
+            if (refundTo == ZROUTER && to != ZROUTER) refundTo = to;
+
             // ---------- FAST PATH #1: pure ETH<->WETH wrap/unwrap ----------
             bool trivialWrap = (tokenIn == address(0) && tokenOut == WETH)
                 || (tokenIn == WETH && tokenOut == address(0));
@@ -563,18 +627,18 @@ contract zQuoter {
                 b = Quote(AMM.UNI_V2, 0, 0, 0);
 
                 if (tokenIn == address(0)) {
-                    // ETH -> WETH: wrap then sweep WETH to recipient
+                    // ETH -> WETH: wrap exact amount then sweep WETH to recipient
                     calls = new bytes[](2);
-                    calls[0] = abi.encodeWithSelector(IRouterExt.wrap.selector, uint256(0));
+                    calls[0] = abi.encodeWithSelector(IRouterExt.wrap.selector, swapAmount);
                     calls[1] = _sweepTo(WETH, to);
                     msgValue = swapAmount;
                 } else {
-                    // WETH -> ETH: deposit WETH, unwrap, sweep ETH to recipient
+                    // WETH -> ETH: deposit WETH, unwrap exact amount, sweep ETH to recipient
                     calls = new bytes[](3);
                     calls[0] = abi.encodeWithSelector(
                         IRouterExt.deposit.selector, WETH, uint256(0), swapAmount
                     );
-                    calls[1] = abi.encodeWithSelector(IRouterExt.unwrap.selector, uint256(0));
+                    calls[1] = abi.encodeWithSelector(IRouterExt.unwrap.selector, swapAmount);
                     calls[2] = _sweepTo(address(0), to);
                     msgValue = 0;
                 }
@@ -605,19 +669,8 @@ contract zQuoter {
             address[6] memory HUBS = _hubs();
 
             // Track the best hub plan we can actually build
-            bool haveBest;
-            bool bestExactOut = exactOut;
-            address bestMID;
-            Quote memory bestA;
-            Quote memory bestB;
-            bytes memory bestCA;
-            bytes memory bestCB;
-            bool bestNeedMidSweep; // only used in exactOut paths
-            bool bestNeedInSweep; // only used in exactOut paths
-            bool bestMidIsWethOrEth; // MID == WETH (ETH handling uses unwrap+sweep)
-            bool bestPrefundV2; // leg 2 is V2/Sushi, leg 1 sends to pool directly
-            uint256 bestScoreIn; // minimal input (for exactOut)
-            uint256 bestScoreOut; // maximal output (for exactIn)
+            HubPlan memory plan;
+            plan.isExactOut = exactOut;
 
             for (uint256 h; h < HUBS.length; ++h) {
                 address MID = HUBS[h];
@@ -640,128 +693,115 @@ contract zQuoter {
 
                     uint256 scoreOut = qb.amountOut; // maximize
 
-                    if (!haveBest || scoreOut > bestScoreOut) {
-                        haveBest = true;
-                        bestMID = MID;
-                        bestExactOut = false;
-                        bestA = qa;
-                        bestB = qb;
-                        bestCA = ca;
-                        bestCB = cb;
-                        bestNeedMidSweep = false; // none for exactIn
-                        bestNeedInSweep = false;
-                        bestMidIsWethOrEth = (MID == WETH);
-                        bestScoreOut = scoreOut;
+                    if (!plan.found || scoreOut > plan.scoreOut) {
+                        plan.found = true;
+                        plan.mid = MID;
+                        plan.isExactOut = false;
+                        plan.a = qa;
+                        plan.b = qb;
+                        plan.ca = ca;
+                        plan.cb = cb;
+                        plan.scoreOut = scoreOut;
                     }
                 } else {
                     // ---- overall exactOut: minimize total input ----
-                    (bool okB, Quote memory qb, bytes memory cb,,) =
-                        _bestSingleHop(to, true, MID, tokenOut, swapAmount, slippageBps, deadline);
-                    if (!okB || qb.amountIn == 0) continue;
+                    // Always route both legs through ZROUTER to avoid correctness issues
+                    // with prefunding V2 pools (Curve/zAMM don't mark transient for the pair,
+                    // and exactOut prefund risks donating excess to LPs).
+                    (bool okB, Quote memory qb, bytes memory cb,,) = _bestSingleHop(
+                        ZROUTER, true, MID, tokenOut, swapAmount, slippageBps, deadline
+                    );
+                    if (!okB || qb.amountIn == 0 || qb.source == AMM.LIDO) continue;
 
                     uint256 midRequired = qb.amountIn;
                     uint256 midLimit = SlippageLib.limit(true, midRequired, slippageBps);
-                    bool prefundV2 = (qb.source == AMM.UNI_V2 || qb.source == AMM.SUSHI);
-                    uint256 midToProduce = prefundV2 ? midRequired : midLimit;
 
-                    address leg1To = ZROUTER;
-                    if (prefundV2) {
-                        // Normalize ETH to WETH for V2 pool address computation
-                        address tOut = tokenOut == address(0) ? WETH : tokenOut;
-                        (address v2pool,) = _v2PoolFor(MID, tOut, (qb.source == AMM.SUSHI));
-                        if (v2pool == address(0) || v2pool.code.length == 0) continue;
-                        leg1To = v2pool;
-                    }
-
-                    (bool okA, Quote memory qa, bytes memory ca,,) = _bestSingleHop(
-                        leg1To, true, tokenIn, MID, midToProduce, slippageBps, deadline
-                    );
+                    (bool okA, Quote memory qa, bytes memory ca,,) =
+                        _bestSingleHop(ZROUTER, true, tokenIn, MID, midLimit, slippageBps, deadline);
                     if (!okA || qa.amountIn == 0 || qa.source == AMM.LIDO) continue;
 
                     uint256 scoreIn = qa.amountIn; // minimize
 
-                    bool zamm2ExactOut = (qb.source == AMM.ZAMM);
-                    bool needMidSweep = (!prefundV2) && (!zamm2ExactOut) && (leg1To == ZROUTER);
-                    bool midIsWethOrEth = (MID == WETH);
-                    bool needInSweep = (qa.source == AMM.ZAMM) && (leg1To == ZROUTER);
-
-                    if (!haveBest || scoreIn < bestScoreIn) {
-                        haveBest = true;
-                        bestMID = MID;
-                        bestExactOut = true;
-                        bestA = qa;
-                        bestB = qb;
-                        bestCA = ca;
-                        bestCB = cb;
-                        bestNeedMidSweep = needMidSweep;
-                        bestNeedInSweep = needInSweep;
-                        bestMidIsWethOrEth = midIsWethOrEth;
-                        bestPrefundV2 = prefundV2;
-                        bestScoreIn = scoreIn;
+                    if (!plan.found || scoreIn < plan.scoreIn) {
+                        plan.found = true;
+                        plan.mid = MID;
+                        plan.isExactOut = true;
+                        plan.a = qa;
+                        plan.b = qb;
+                        plan.ca = ca;
+                        plan.cb = cb;
+                        plan.scoreIn = scoreIn;
                     }
                 }
             }
 
-            if (!haveBest) revert NoRoute();
+            if (!plan.found) revert NoRoute();
 
             // ---------- materialize the chosen plan into calls ----------
-            if (!bestExactOut) {
+            if (!plan.isExactOut) {
                 // exactIn path: two calls, no sweeps
                 calls = new bytes[](2);
-                calls[0] = bestCA; // hop-1 tokenIn -> MID (exactIn)
+                calls[0] = plan.ca; // hop-1 tokenIn -> MID (exactIn)
                 // hop-2: swapAmount=0 so router auto-consumes full MID balance
                 calls[1] = _buildCalldataFromBest(
                     to,
                     false,
-                    bestMID,
+                    plan.mid,
                     tokenOut,
                     0,
-                    SlippageLib.limit(false, bestB.amountOut, slippageBps),
+                    SlippageLib.limit(false, plan.b.amountOut, slippageBps),
                     slippageBps,
                     deadline,
-                    bestB
+                    plan.b
                 );
-                a = bestA;
-                b = bestB;
+                a = plan.a;
+                b = plan.b;
                 // If tokenIn is ETH, hop-1 needs ETH for exactIn
                 msgValue = (tokenIn == address(0)) ? swapAmount : 0;
             } else {
-                // exactOut path: two calls + optional dust sweeps
-                // When tokenIn is ETH and leg 1 outputs to ZROUTER (to == address(this)),
-                // the swap function skips the ETH refund. We need an explicit ETH sweep
-                // unless the WETH mid-sweep (unwrap+sweep(ETH)) or ZAMM in-sweep already covers it,
-                // or V2 prefunding routes leg 1 to the pool directly (to != address(this)).
-                bool needEthInputSweep = (tokenIn == address(0)) && !bestPrefundV2
-                    && !(bestNeedMidSweep && bestMidIsWethOrEth) && !bestNeedInSweep;
-                uint256 extra = (bestNeedMidSweep ? (bestMidIsWethOrEth ? 2 : 1) : 0)
-                    + (bestNeedInSweep ? 1 : 0) + (needEthInputSweep ? 1 : 0);
+                // exactOut path: both legs route to ZROUTER, then explicit sweeps.
+                // Unconditionally sweep all possible leftover tokens to avoid stranding
+                // funds in the router (where sweep() is public).
+                bool chaining = (to == ZROUTER);
+                bool ethInput = (tokenIn == address(0));
+
+                // Count finalization calls (when not chaining, sweep everything out):
+                //   1) tokenOut delivery (exact swapAmount)
+                //   2) MID leftover refund (over-production from slippage buffer)
+                //   3) tokenIn leftover refund (any venue can leave dust in exactOut)
+                //   4) ETH dust refund (when tokenIn is ETH)
+                uint256 extra;
+                if (!chaining) {
+                    extra++; // tokenOut delivery
+                    extra++; // MID leftover
+                    if (!ethInput) extra++; // tokenIn leftover (ERC20)
+                    extra++; // ETH dust (always: even non-ETH input can have ETH from unwraps)
+                }
+
                 calls = new bytes[](2 + extra);
-
                 uint256 k;
-                calls[k++] = bestCA; // hop-1 tokenIn -> MID (exactOut)
-                calls[k++] = bestCB; // hop-2 MID -> tokenOut (exactOut)
+                calls[k++] = plan.ca; // hop-1 tokenIn -> MID (exactOut, to=ZROUTER)
+                calls[k++] = plan.cb; // hop-2 MID -> tokenOut (exactOut, to=ZROUTER)
 
-                if (bestNeedMidSweep) {
-                    if (bestMidIsWethOrEth) {
-                        calls[k++] = abi.encodeWithSelector(IRouterExt.unwrap.selector, 0);
-                        calls[k++] = _sweepTo(address(0), refundTo);
-                    } else {
-                        calls[k++] = _sweepTo(bestMID, refundTo);
+                if (!chaining) {
+                    // Deliver exact output amount to recipient
+                    calls[k++] = abi.encodeWithSelector(
+                        IRouterExt.sweep.selector, tokenOut, uint256(0), swapAmount, to
+                    );
+                    // Refund leftover MID (as-is, WETH stays as WETH)
+                    calls[k++] = _sweepTo(plan.mid, refundTo);
+                    // Refund leftover tokenIn (ERC20 only; ETH covered by ETH dust sweep)
+                    if (!ethInput) {
+                        calls[k++] = _sweepTo(tokenIn, refundTo);
                     }
-                }
-                if (bestNeedInSweep) {
-                    calls[k++] = _sweepTo(tokenIn, refundTo);
-                }
-                if (needEthInputSweep) {
+                    // Refund any ETH dust
                     calls[k++] = _sweepTo(address(0), refundTo);
                 }
 
-                a = bestA;
-                b = bestB;
+                a = plan.a;
+                b = plan.b;
                 // If tokenIn is ETH, hop-1 exactOut needs ETH equal to its maxIn limit
-                msgValue = (tokenIn == address(0))
-                    ? SlippageLib.limit(true, bestA.amountIn, slippageBps)
-                    : 0;
+                msgValue = ethInput ? SlippageLib.limit(true, plan.a.amountIn, slippageBps) : 0;
             }
 
             multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, calls);
@@ -1011,14 +1051,17 @@ contract zQuoter {
             tokenOut = _normalizeETH(tokenOut);
 
             // Gather all individual venue quotes
-            (Quote memory baseBest, Quote[] memory baseQuotes) =
-                getQuotes(false, tokenIn, tokenOut, swapAmount);
+            (, Quote[] memory baseQuotes) = getQuotes(false, tokenIn, tokenOut, swapAmount);
 
             // Collect candidates: base quotes + Curve
-            uint256 numCandidates = baseQuotes.length;
-            Quote[] memory candidates = new Quote[](numCandidates + 1);
-            for (uint256 i; i < numCandidates; ++i) {
-                candidates[i] = baseQuotes[i];
+            // Filter out LIDO (uses callvalue(), unsafe in multicall splits) and WETH_WRAP.
+            uint256 numCandidates;
+            Quote[] memory candidates = new Quote[](baseQuotes.length + 1);
+            for (uint256 i; i < baseQuotes.length; ++i) {
+                if (baseQuotes[i].source == AMM.LIDO || baseQuotes[i].source == AMM.WETH_WRAP) {
+                    continue;
+                }
+                candidates[numCandidates++] = baseQuotes[i];
             }
 
             // Add Curve candidate
@@ -1055,7 +1098,7 @@ contract zQuoter {
             if (best2Out == 0 || best1Idx == best2Idx) {
                 legs[0] = candidates[best1Idx];
                 // Build single swap
-                (, bytes memory cd, uint256 lim, uint256 mv) =
+                (, bytes memory cd,, uint256 mv) =
                     buildBestSwap(to, false, tokenIn, tokenOut, swapAmount, slippageBps, deadline);
                 bytes[] memory calls_ = new bytes[](1);
                 calls_[0] = cd;
@@ -1122,47 +1165,62 @@ contract zQuoter {
                 bool ethIn = tokenIn == address(0);
                 address legTo = ethIn ? ZROUTER : to;
 
-                // Curve legs with ETH input need a pre-wrap: swapCurve checks
-                // msg.value == amountIn, which fails in multicall where msg.value
-                // is the total for all legs. Pre-wrapping ETH→WETH stores WETH in
-                // transient storage, which swapCurve consumes before reaching the
-                // msg.value check.
+                // Curve legs with ETH input need a pre-wrap + route patch:
+                // swapCurve checks msg.value == amountIn for ETH input, which fails
+                // in multicall where msg.value is the total for all legs. We wrap
+                // ETH→WETH into transient storage, then patch route[0] to WETH so
+                // swapCurve treats it as WETH input and bypasses the msg.value check.
                 bool wrapLeg1 = ethIn && legs[0].source == AMM.CURVE;
                 bool wrapLeg2 = ethIn && legs[1].source == AMM.CURVE;
-                uint256 numCalls = 2 + (ethIn ? 1 : 0) + (wrapLeg1 ? 1 : 0) + (wrapLeg2 ? 1 : 0);
+                // ETH input needs: sweep tokenOut + sweep ETH dust (2 extra calls)
+                uint256 numCalls = 2 + (ethIn ? 2 : 0) + (wrapLeg1 ? 1 : 0) + (wrapLeg2 ? 1 : 0);
                 bytes[] memory calls_ = new bytes[](numCalls);
                 uint256 ci;
 
                 if (wrapLeg1) {
                     calls_[ci++] = abi.encodeWithSelector(IRouterExt.wrap.selector, finalAmt1);
                 }
-                calls_[ci++] = _buildCalldataFromBest(
-                    legTo,
-                    false,
-                    tokenIn,
-                    tokenOut,
-                    finalAmt1,
-                    limit1,
-                    slippageBps,
-                    deadline,
-                    legs[0]
-                );
+                {
+                    bytes memory cd1 = _buildCalldataFromBest(
+                        legTo,
+                        false,
+                        tokenIn,
+                        tokenOut,
+                        finalAmt1,
+                        limit1,
+                        slippageBps,
+                        deadline,
+                        legs[0]
+                    );
+                    // Patch route[0] from ETH to WETH so swapCurve bypasses the
+                    // msg.value==amountIn check and consumes pre-wrapped WETH instead.
+                    if (wrapLeg1) assembly ("memory-safe") { mstore(add(cd1, 100), WETH) }
+                    calls_[ci++] = cd1;
+                }
                 if (wrapLeg2) {
                     calls_[ci++] = abi.encodeWithSelector(IRouterExt.wrap.selector, finalAmt2);
                 }
-                calls_[ci++] = _buildCalldataFromBest(
-                    legTo,
-                    false,
-                    tokenIn,
-                    tokenOut,
-                    finalAmt2,
-                    limit2,
-                    slippageBps,
-                    deadline,
-                    legs[1]
-                );
+                {
+                    bytes memory cd2 = _buildCalldataFromBest(
+                        legTo,
+                        false,
+                        tokenIn,
+                        tokenOut,
+                        finalAmt2,
+                        limit2,
+                        slippageBps,
+                        deadline,
+                        legs[1]
+                    );
+                    if (wrapLeg2) assembly ("memory-safe") { mstore(add(cd2, 100), WETH) }
+                    calls_[ci++] = cd2;
+                }
                 if (ethIn) {
+                    // Sweep output token to recipient
                     calls_[ci++] = _sweepTo(tokenOut, to);
+                    // Sweep any leftover ETH dust (V3/V4 refund excess msg.value to router
+                    // during delegatecall; sweep prevents it from being stealable)
+                    calls_[ci++] = _sweepTo(address(0), to);
                 }
 
                 multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, calls_);
@@ -1240,11 +1298,15 @@ contract zQuoter {
             tokenOut = _normalizeETH(tokenOut);
 
             // ---- Gather candidates ----
+            // Filter out LIDO (uses callvalue(), unsafe in multicall splits) and WETH_WRAP.
             (, Quote[] memory baseQuotes) = getQuotes(false, tokenIn, tokenOut, swapAmount);
-            uint256 n = baseQuotes.length;
-            Quote[] memory cands = new Quote[](n + 2);
-            for (uint256 i; i < n; ++i) {
-                cands[i] = baseQuotes[i];
+            uint256 n;
+            Quote[] memory cands = new Quote[](baseQuotes.length + 2);
+            for (uint256 i; i < baseQuotes.length; ++i) {
+                if (baseQuotes[i].source == AMM.LIDO || baseQuotes[i].source == AMM.WETH_WRAP) {
+                    continue;
+                }
+                cands[n++] = baseQuotes[i];
             }
 
             // Curve
@@ -1427,7 +1489,7 @@ contract zQuoter {
             // Curve legs with ETH input need a pre-wrap
             bool wrapLeg1 = ethIn && !v1h && legs[0].source == AMM.CURVE;
             bool wrapLeg2 = ethIn && !v2h && legs[1].source == AMM.CURVE;
-            uint256 nc = 2 + (ethIn ? 1 : 0) + (wrapLeg1 ? 1 : 0) + (wrapLeg2 ? 1 : 0);
+            uint256 nc = 2 + (ethIn ? 2 : 0) + (wrapLeg1 ? 1 : 0) + (wrapLeg2 ? 1 : 0);
             bytes[] memory calls_ = new bytes[](nc);
             uint256 ci;
 
@@ -1448,9 +1510,11 @@ contract zQuoter {
                     hookAddress
                 );
             } else {
-                calls_[ci++] = _buildCalldataFromBest(
+                bytes memory cd1 = _buildCalldataFromBest(
                     legTo, false, tokenIn, tokenOut, fa1, lim1, slippageBps, deadline, legs[0]
                 );
+                if (wrapLeg1) assembly ("memory-safe") { mstore(add(cd1, 100), WETH) }
+                calls_[ci++] = cd1;
             }
 
             // Leg 2
@@ -1470,14 +1534,18 @@ contract zQuoter {
                     hookAddress
                 );
             } else {
-                calls_[ci++] = _buildCalldataFromBest(
+                bytes memory cd2 = _buildCalldataFromBest(
                     legTo, false, tokenIn, tokenOut, fa2, lim2, slippageBps, deadline, legs[1]
                 );
+                if (wrapLeg2) assembly ("memory-safe") { mstore(add(cd2, 100), WETH) }
+                calls_[ci++] = cd2;
             }
 
-            // Final sweep for ETH input
+            // Final sweeps for ETH input
             if (ethIn) {
                 calls_[ci++] = _sweepTo(tokenOut, to);
+                // Sweep any leftover ETH dust (prevents stealable balance in router)
+                calls_[ci++] = _sweepTo(address(0), to);
             }
 
             multicall = abi.encodeWithSelector(IRouterExt.multicall.selector, calls_);

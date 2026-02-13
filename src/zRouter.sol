@@ -485,37 +485,39 @@ contract zRouter {
                         if (pt == 10) {
                             int128 pi = int128(int256(p[0]));
                             int128 pj = int128(int256(p[1]));
-                            amount = IStableNgPool(pool).get_dx(pi, pj, amount);
+                            amount = IStableNgPool(pool).get_dx(pi, pj, amount) + 1;
                         } else {
-                            amount = ICryptoNgPool(pool).get_dx(p[0], p[1], amount);
+                            amount = ICryptoNgPool(pool).get_dx(p[0], p[1], amount) + 1;
                         }
                     } else if (st == 2) {
                         int128 pi = int128(int256(p[0]));
                         int128 pj = int128(int256(p[1]));
                         if (pi > 0 && pj > 0) {
-                            amount = IStableNgPool(basePools[i]).get_dx(pi - 1, pj - 1, amount);
+                            amount = IStableNgPool(basePools[i]).get_dx(pi - 1, pj - 1, amount) + 1;
                         } else {
-                            amount = IStableNgMetaPool(pool).get_dx_underlying(pi, pj, amount);
+                            amount = IStableNgMetaPool(pool).get_dx_underlying(pi, pj, amount) + 1;
                         }
                     } else if (st == 4) {
                         // inverse of add_liquidity (approx):
-                        amount = (pt == 10)
-                            ? IStableNgPool(pool)
-                                .calc_withdraw_one_coin(amount, int128(int256(p[0])))
-                            : ICryptoNgPool(pool).calc_withdraw_one_coin(amount, p[0]);
+                        amount =
+                            ((pt == 10)
+                                        ? IStableNgPool(pool)
+                                            .calc_withdraw_one_coin(amount, int128(int256(p[0])))
+                                        : ICryptoNgPool(pool).calc_withdraw_one_coin(amount, p[0]))
+                                + 1;
                     } else if (st == 6) {
                         if (pt == 10) {
                             uint256[8] memory a;
                             a[p[1]] = amount;
-                            amount = IStableNgPool(pool).calc_token_amount(a, false);
+                            amount = IStableNgPool(pool).calc_token_amount(a, false) + 1;
                         } else if (pt == 20) {
                             uint256[2] memory a2;
                             a2[p[1]] = amount;
-                            amount = ITwoCryptoNgPool(pool).calc_token_amount(a2, false);
+                            amount = ITwoCryptoNgPool(pool).calc_token_amount(a2, false) + 1;
                         } else if (pt == 30) {
                             uint256[3] memory a3;
                             a3[p[1]] = amount;
-                            amount = ITriCryptoNgPool(pool).calc_token_amount(a3, false);
+                            amount = ITriCryptoNgPool(pool).calc_token_amount(a3, false) + 1;
                         } else {
                             revert BadSwap();
                         }

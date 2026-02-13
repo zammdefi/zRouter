@@ -20,7 +20,7 @@ Features:
 
 Deployed to Ethereum: [0x000000000000FB114709235f1ccBFfb925F600e4](https://etherscan.io/address/0x000000000000FB114709235f1ccBFfb925F600e4#code)
 
-Router helper (`zQuoter`) deployed to [0x82393672d597b70437b8df275172a3b3e157aeb6](https://etherscan.io/address/0x82393672d597b70437b8df275172a3b3e157aeb6#code) on Ethereum.
+Router helper (`zQuoter`) deployed to [0x980d025B989FA770d5A86947DB9248d30666652B](https://etherscan.io/address/0x980d025B989FA770d5A86947DB9248d30666652B#code) on Ethereum.
 
 And [0x772E2810A471dB2CC7ADA0d37D6395476535889a](https://basescan.org/address/0x772E2810A471dB2CC7ADA0d37D6395476535889a#code) on Base.
 
@@ -71,6 +71,37 @@ Both case default deadline to `(now) + 30 minutes`, which is a reasonable stalen
 | BASE | V4 • single • exact-in • ETH→USDC | 92,368 | 90,080 | -2,288 | -2.48% |
 | BASE | V3 • single • exact-out • TOKEN→ETH | 119,296 | 117,648 | -1,648 | -1.38% |
 
+## SubdomainRegistrar
+
+Permissionless subdomain registration for [NameNFT](https://etherscan.io/address/0x0000000000696760E15f265e828DB644A0c242EB). Parent name owners configure pricing, fee tokens, and optional token-gating — buyers register subdomains in a single transaction.
+
+Deployed to Ethereum: [0x0000000000DD72Ef1DF17f527E719AEE5ef71E64](https://etherscan.io/address/0x0000000000DD72Ef1DF17f527E719AEE5ef71E64#code)
+
+### Modes
+
+- **Escrow mode** — Parent NFT is deposited into the registrar via `deposit()` or `safeTransferFrom()`. Subdomains are minted directly. Withdraw anytime with `withdrawParent()`.
+- **Flash mode** — Parent NFT stays in the controller's wallet. The registrar pulls the parent, mints the subdomain, and returns the parent atomically. Requires `setApprovalForAll`.
+
+### Features
+
+- **ETH or ERC20 fees** — Set `feeToken` to `address(0)` for ETH pricing, or any ERC20 token address. Excess ETH is refunded automatically. ETH fees use pull-payment (`withdrawETH()`).
+- **Token gating** — Require buyers to hold a minimum `balanceOf` any ERC20 or ERC721 (`gateToken` + `minGateBalance`).
+- **Stale controller protection** — Registration reverts if the parent has changed hands since configuration (`StaleController`).
+- **Stale escrow cleanup** — `clearStaleEscrow()` permissionlessly clears orphaned escrow records after a parent expires past grace and is re-registered.
+
+### Interface
+
+| Function | Description |
+|---|---|
+| `configure(parentId, payout, feeToken, price, enabled, gateToken, minGateBalance)` | Set registration parameters for a parent |
+| `disable(parentId)` | Disable registration for a parent |
+| `deposit(parentId)` | Escrow a parent NFT into the registrar |
+| `withdrawParent(parentId, to)` | Withdraw an escrowed parent (disables config) |
+| `register(parentId, label)` | Register a subdomain (paid by `msg.sender`, minted to `msg.sender`) |
+| `registerFor(parentId, label, to)` | Register a subdomain to a different address |
+| `withdrawETH(to)` | Withdraw accumulated ETH fees |
+| `clearStaleEscrow(parentId)` | Clear orphaned escrow after parent re-registration |
+
 ## Getting Started
 
 Run: `curl -L https://foundry.paradigm.xyz | bash && source ~/.bashrc && foundryup`
@@ -85,9 +116,11 @@ lib
 ├─ solady — https://github.com/vectorized/solady
 src
 ├─ zRouter — Router Contract
+├─ SubdomainRegistrar — Subdomain Registration Contract
 test
 ├─ zRouter.t — Test Contract
-└─ zRouterBench.t - Benchmarks
+├─ zRouterBench.t - Benchmarks
+└─ SubdomainRegistrar.t — SubdomainRegistrar Tests
 ```
 
 ## Disclaimer

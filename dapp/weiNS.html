@@ -647,7 +647,16 @@ const ZROUTER = '0x000000000000FB114709235f1ccBFfb925F600e4';
 const USDC_ADDR = '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48';
 const DAI_ADDR = '0x6B175474E89094C44Da98b954EedeAC495271d0F';
 const WETH_ADDR = '0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2';
-const ZQUOTER = '0x82393672d597b70437b8df275172a3b3e157aeb6';
+const ZQUOTER = '0x980d025B989FA770d5A86947DB9248d30666652B';
+const SUBDOMAIN_REGISTRAR = '0x0000000000DD72Ef1DF17f527E719AEE5ef71E64';
+const REGISTRAR_ABI = [
+  'function configure(uint256 parentId, address payout, address feeToken, uint256 price, bool enabled, address gateToken, uint256 minGateBalance)',
+  'function disable(uint256 parentId)',
+  'function config(uint256 parentId) view returns (address controller, bool enabled, address feeToken, uint96 price, address gateToken, uint96 minGateBalance, address payout)',
+  'function withdrawETH(address to)',
+  'function ethBalance(address) view returns (uint256)',
+  'function escrowedController(uint256) view returns (address)'
+];
 
 // Gateway for .wei websites - resolves name.wei.domains to IPFS contenthash
 // URL pattern: https://name.wei.domains (not name.wei.wei.domains)
@@ -1392,6 +1401,7 @@ async function doCheckName() {
   const feeEl = $('feeDisplay');
   const commitBtn = $('commitBtn');
   const hasPending = !!loadPending();
+  pendingMintInfo = null;
 
   if (!raw.trim()) {
     availEl.classList.remove('show');
@@ -1446,9 +1456,65 @@ async function doCheckName() {
       const escaped = escapeHtml(fullName);
 
       if (!owner) {
-        availEl.innerHTML = '<span class="available">' + escaped + '.wei is not registered</span>' +
+        availEl.innerHTML = '<span class="available">' + escaped + '.wei is available</span>' +
           '<div class="view-link"><a href="#" onclick="copyShareLink();return false;">Copy link →</a></div>';
-        feeEl.textContent = 'Subdomains are free (registered by parent owner)';
+
+        // Check if parent has subdomain sales enabled via SubdomainRegistrar
+        const parts = fullName.split('.');
+        if (parts.length >= 2) {
+          const subLabel = parts[0];
+          const parentName = parts.slice(1).join('.');
+          try {
+            const parentId = await readContract.computeId(parentName + '.wei');
+            if (thisVersion !== checkVersion) return;
+
+            const regIface = new ethers.Interface(REGISTRAR_ABI);
+            const ownerIface = new ethers.Interface(['function ownerOf(uint256) view returns (address)']);
+            const [cfgRes, parentOwnerRes, escrowRes] = await Promise.all([
+              rpcProvider.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('config', [parentId]) }),
+              rpcProvider.call({ to: CONTRACT, data: ownerIface.encodeFunctionData('ownerOf', [parentId]) }),
+              rpcProvider.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('escrowedController', [parentId]) })
+            ]);
+            if (thisVersion !== checkVersion) return;
+
+            const cfg = regIface.decodeFunctionResult('config', cfgRes);
+            const parentOwner = ownerIface.decodeFunctionResult('ownerOf', parentOwnerRes)[0];
+            const escrowedAddr = regIface.decodeFunctionResult('escrowedController', escrowRes)[0];
+            const [cfgController, cfgEnabled, cfgFeeToken, cfgPrice] = cfg;
+
+            // Mirror contract's _controllerOf: escrow takes priority over ownerOf
+            const currentController = escrowedAddr !== ethers.ZeroAddress ? escrowedAddr : parentOwner;
+
+            // Only show mint if enabled AND controller matches (not stale)
+            if (cfgEnabled && cfgController.toLowerCase() === currentController.toLowerCase()) {
+              let priceDisplay, tokenDecimals = 18, tokenSymbol = '';
+
+              if (cfgFeeToken === ethers.ZeroAddress) {
+                priceDisplay = cfgPrice === 0n ? 'Free' : ethers.formatEther(cfgPrice) + ' ETH';
+              } else {
+                try {
+                  [tokenDecimals, tokenSymbol] = await Promise.all([
+                    getTokenDecimals(cfgFeeToken, rpcProvider),
+                    getTokenSymbol(cfgFeeToken, rpcProvider)
+                  ]);
+                  if (thisVersion !== checkVersion) return;
+                  priceDisplay = cfgPrice === 0n ? 'Free' : ethers.formatUnits(cfgPrice, tokenDecimals) + ' ' + tokenSymbol;
+                } catch {
+                  priceDisplay = cfgPrice.toString() + ' tokens';
+                }
+              }
+
+              pendingMintInfo = { parentId, subLabel, feeToken: cfgFeeToken, price: cfgPrice, decimals: tokenDecimals, symbol: tokenSymbol };
+              feeEl.innerHTML = 'Price: ' + escapeHtml(priceDisplay) +
+                '<br><button onclick="doMintSubdomain()" style="margin-top:8px;"' +
+                (!signer ? ' disabled' : '') + '>Mint ' + escaped + '.wei</button>';
+            } else {
+              feeEl.textContent = 'Only the parent owner can register this subdomain';
+            }
+          } catch {
+            feeEl.textContent = 'Only the parent owner can register this subdomain';
+          }
+        }
       } else {
         const osLink = `https://opensea.io/assets/ethereum/${CONTRACT}/${tokenId}`;
         availEl.innerHTML = '<span class="taken">' + escaped + '.wei exists</span>' +
@@ -2157,6 +2223,7 @@ function showStatus(msg, type, txHash) {
 let currentTokenId = null;
 let currentTokenName = null;
 let isProcessing = false; // Prevent double-click on manage actions
+let pendingMintInfo = null;
 
 function hideManage() {
   $('manage').classList.remove('show');
@@ -2261,6 +2328,7 @@ async function showManage(tokenId, name) {
         <button onclick="showManageForm('setContent')">Set Website</button>
         <button onclick="showManageForm('setText')">Set Text</button>
         <button onclick="showManageForm('subdomain')">Subdomain</button>
+        <button onclick="showManageForm('subSales')">Subdomain Sales</button>
         <button onclick="doSetPrimary()">Set as Display Name</button>
       `;
       if (isTopLevel) {
@@ -2330,6 +2398,9 @@ function showManageForm(action) {
         <button class="secondary" onclick="$('manageForm').classList.remove('show')">Cancel</button>
       `;
       break;
+    case 'subSales':
+      showSubSalesForm();
+      return;
     case 'renew':
       html = `
         <div style="font-size:13px;margin-bottom:12px;">Extend registration for 1 year</div>
@@ -2704,6 +2775,360 @@ async function doSubdomain() {
     handleError(e);
   } finally {
     isProcessing = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Subdomain Registrar integration
+let subSalesFeeType = 'free';
+let subSalesTokenDecimals = 18;
+let subSalesTokenSymbol = '';
+
+async function getTokenDecimals(tokenAddr, provider) {
+  const i = new ethers.Interface(['function decimals() view returns (uint8)']);
+  const res = await provider.call({ to: tokenAddr, data: i.encodeFunctionData('decimals') });
+  return Number(i.decodeFunctionResult('decimals', res)[0]);
+}
+
+async function getTokenSymbol(tokenAddr, provider) {
+  const i = new ethers.Interface(['function symbol() view returns (string)']);
+  const res = await provider.call({ to: tokenAddr, data: i.encodeFunctionData('symbol') });
+  return i.decodeFunctionResult('symbol', res)[0];
+}
+
+function selectFeeType(el) {
+  el.parentNode.querySelectorAll('.pay-option').forEach(b => b.classList.remove('active'));
+  el.classList.add('active');
+  subSalesFeeType = el.dataset.feetype;
+  const priceWrap = $('subSalesPriceWrap');
+  const tokenWrap = $('subSalesTokenWrap');
+  if (priceWrap) priceWrap.style.display = subSalesFeeType === 'free' ? 'none' : 'block';
+  if (tokenWrap) tokenWrap.style.display = subSalesFeeType === 'erc20' ? 'block' : 'none';
+}
+
+let subSalesTokenDebounce = null;
+
+function previewSubSalesToken() {
+  clearTimeout(subSalesTokenDebounce);
+  subSalesTokenDebounce = setTimeout(async () => {
+    const addr = $('subSalesToken')?.value.trim();
+    const info = $('subSalesTokenInfo');
+    if (!info) return;
+    if (!addr || !ethers.isAddress(addr)) {
+      info.textContent = '';
+      return;
+    }
+    try {
+      const rpc = await getRpc();
+      const [decimals, symbol] = await Promise.all([
+        getTokenDecimals(addr, rpc),
+        getTokenSymbol(addr, rpc)
+      ]);
+      subSalesTokenDecimals = decimals;
+      subSalesTokenSymbol = symbol;
+      info.textContent = symbol + ' (' + decimals + ' decimals)';
+    } catch {
+      info.textContent = 'Could not read token info';
+      subSalesTokenDecimals = 18;
+      subSalesTokenSymbol = '';
+    }
+  }, 400);
+}
+
+async function showSubSalesForm() {
+  const form = $('manageForm');
+  form.innerHTML = '<div style="opacity:0.5;font-size:12px;">Loading config...</div>';
+  form.classList.add('show');
+
+  try {
+    const rpc = await getRpc();
+    const regIface = new ethers.Interface(REGISTRAR_ABI);
+    const nftIface = new ethers.Interface([
+      'function isApprovedForAll(address owner, address operator) view returns (bool)'
+    ]);
+
+    const [cfgRes, approvedRes, balRes] = await Promise.all([
+      rpc.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('config', [currentTokenId]) }),
+      rpc.call({ to: CONTRACT, data: nftIface.encodeFunctionData('isApprovedForAll', [connectedAddress, SUBDOMAIN_REGISTRAR]) }),
+      rpc.call({ to: SUBDOMAIN_REGISTRAR, data: regIface.encodeFunctionData('ethBalance', [connectedAddress]) })
+    ]);
+
+    const cfg = regIface.decodeFunctionResult('config', cfgRes);
+    const isApproved = nftIface.decodeFunctionResult('isApprovedForAll', approvedRes)[0];
+    const ethBal = regIface.decodeFunctionResult('ethBalance', balRes)[0];
+
+    const [cfgController, cfgEnabled, cfgFeeToken, cfgPrice, , , cfgPayout] = cfg;
+
+    const isConfigured = cfgController !== ethers.ZeroAddress &&
+                         cfgController.toLowerCase() === connectedAddress.toLowerCase();
+    const hasActiveConfig = isConfigured && cfgEnabled;
+
+    // Pre-fill from existing config
+    let currentFeeType = 'free';
+    let currentPriceStr = '';
+    let currentTokenAddr = '';
+    let currentPayoutStr = '';
+
+    if (hasActiveConfig) {
+      if (cfgFeeToken === ethers.ZeroAddress) {
+        if (cfgPrice > 0n) {
+          currentFeeType = 'eth';
+          currentPriceStr = ethers.formatEther(cfgPrice);
+        }
+      } else {
+        currentFeeType = 'erc20';
+        currentTokenAddr = cfgFeeToken;
+        try {
+          const [dec, sym] = await Promise.all([
+            getTokenDecimals(cfgFeeToken, rpc),
+            getTokenSymbol(cfgFeeToken, rpc)
+          ]);
+          subSalesTokenDecimals = dec;
+          subSalesTokenSymbol = sym;
+          currentPriceStr = cfgPrice > 0n ? ethers.formatUnits(cfgPrice, dec) : '';
+        } catch {
+          currentPriceStr = cfgPrice.toString();
+        }
+      }
+      if (cfgPayout !== ethers.ZeroAddress && cfgPayout.toLowerCase() !== connectedAddress.toLowerCase()) {
+        currentPayoutStr = cfgPayout;
+      }
+    }
+
+    subSalesFeeType = currentFeeType;
+
+    // Status banners
+    let statusHtml = '';
+    if (hasActiveConfig) {
+      let priceDesc;
+      if (cfgFeeToken === ethers.ZeroAddress) {
+        priceDesc = cfgPrice === 0n ? 'Free' : ethers.formatEther(cfgPrice) + ' ETH';
+      } else {
+        priceDesc = (currentPriceStr || '0') + ' ' + (subSalesTokenSymbol || cfgFeeToken.slice(0, 8) + '...');
+      }
+      statusHtml = '<div style="padding:10px;background:#f0fff0;margin-bottom:12px;font-size:12px;">Currently enabled — ' + escapeHtml(priceDesc) + ' per subdomain</div>';
+    } else if (isConfigured) {
+      statusHtml = '<div style="padding:10px;background:#f5f5f5;margin-bottom:12px;font-size:12px;">Currently disabled</div>';
+    }
+
+    if (!isApproved) {
+      statusHtml += '<div style="padding:10px;background:#fff8e0;margin-bottom:12px;font-size:11px;">Approval required — the registrar needs permission to flash-borrow your name for minting. Your name stays in your wallet.</div>';
+    }
+
+    if (ethBal > 0n) {
+      statusHtml += '<div style="padding:10px;background:#f5f5ff;margin-bottom:12px;font-size:12px;">Claimable fees: ' + ethers.formatEther(ethBal) + ' ETH <button onclick="doWithdrawRegFees()" style="margin-left:8px;padding:4px 10px;font-size:11px;">Withdraw</button></div>';
+    }
+
+    const showPrice = currentFeeType !== 'free';
+    const showToken = currentFeeType === 'erc20';
+    const tokenInfo = subSalesTokenSymbol ? subSalesTokenSymbol + ' (' + subSalesTokenDecimals + ' decimals)' : '';
+
+    form.innerHTML = statusHtml + '\
+      <label>Fee Type</label>\
+      <div style="display:flex;gap:0;margin-bottom:12px;">\
+        <button type="button" class="pay-option' + (currentFeeType === 'free' ? ' active' : '') + '" data-feetype="free" onclick="selectFeeType(this)">Free</button>\
+        <button type="button" class="pay-option' + (currentFeeType === 'eth' ? ' active' : '') + '" data-feetype="eth" onclick="selectFeeType(this)">ETH</button>\
+        <button type="button" class="pay-option' + (currentFeeType === 'erc20' ? ' active' : '') + '" data-feetype="erc20" onclick="selectFeeType(this)">ERC20</button>\
+      </div>\
+      <div id="subSalesPriceWrap" style="display:' + (showPrice ? 'block' : 'none') + ';">\
+        <label>Price per subdomain</label>\
+        <input type="text" id="subSalesPrice" placeholder="0.01" value="' + escapeHtml(currentPriceStr) + '">\
+      </div>\
+      <div id="subSalesTokenWrap" style="display:' + (showToken ? 'block' : 'none') + ';">\
+        <label>Token Address</label>\
+        <input type="text" id="subSalesToken" placeholder="0xA0b86991..." value="' + escapeHtml(currentTokenAddr) + '" oninput="previewSubSalesToken()">\
+        <div id="subSalesTokenInfo" style="font-size:11px;opacity:0.5;margin-bottom:12px;">' + escapeHtml(tokenInfo) + '</div>\
+      </div>\
+      <label>Payout Address</label>\
+      <input type="text" id="subSalesPayout" placeholder="Defaults to you" value="' + escapeHtml(currentPayoutStr) + '">\
+      <button onclick="doConfigureSubSales()">Enable Subdomain Sales</button>\
+      ' + (hasActiveConfig ? '<button class="secondary" onclick="doDisableSubSales()">Disable</button>' : '') + '\
+      <button class="secondary" onclick="$(\'manageForm\').classList.remove(\'show\')">Cancel</button>\
+      <div style="font-size:10px;opacity:0.4;margin-top:12px;">Flash mode — your name stays in your wallet. The registrar borrows it atomically to mint each subdomain.</div>';
+  } catch (e) {
+    form.innerHTML = '<div style="color:#c00;font-size:12px;">Error loading config: ' + escapeHtml(e.message) + '</div><button class="secondary" onclick="$(\'manageForm\').classList.remove(\'show\')" style="margin-top:8px;">Close</button>';
+  }
+}
+
+async function doConfigureSubSales() {
+  if (isProcessing || !signer || !currentTokenId) return;
+  isProcessing = true;
+  const btn = event?.target; if (btn) btn.disabled = true;
+
+  try {
+    let feeToken = ethers.ZeroAddress;
+    let price = 0n;
+
+    if (subSalesFeeType === 'eth') {
+      const priceStr = $('subSalesPrice')?.value.trim();
+      if (priceStr && priceStr !== '0') {
+        price = ethers.parseEther(priceStr);
+      }
+    } else if (subSalesFeeType === 'erc20') {
+      feeToken = $('subSalesToken')?.value.trim();
+      if (!feeToken || !ethers.isAddress(feeToken)) {
+        showStatus('Invalid token address', 'error');
+        return;
+      }
+      const priceStr = $('subSalesPrice')?.value.trim();
+      if (priceStr && priceStr !== '0') {
+        const rpc = await getRpc();
+        const decimals = await getTokenDecimals(feeToken, rpc);
+        price = ethers.parseUnits(priceStr, decimals);
+      }
+    }
+
+    const payoutAddr = $('subSalesPayout')?.value.trim() || ethers.ZeroAddress;
+    if (payoutAddr !== ethers.ZeroAddress && !ethers.isAddress(payoutAddr)) {
+      showStatus('Invalid payout address', 'error');
+      return;
+    }
+
+    // Check approval for flash mode
+    const rpc = await getRpc();
+    const nftIface = new ethers.Interface([
+      'function isApprovedForAll(address owner, address operator) view returns (bool)'
+    ]);
+    const approvedRes = await rpc.call({
+      to: CONTRACT,
+      data: nftIface.encodeFunctionData('isApprovedForAll', [connectedAddress, SUBDOMAIN_REGISTRAR])
+    });
+    const isApproved = nftIface.decodeFunctionResult('isApprovedForAll', approvedRes)[0];
+
+    if (!isApproved) {
+      showStatus('Approving registrar...', '');
+      const nftContract = new ethers.Contract(CONTRACT, [
+        'function setApprovalForAll(address operator, bool approved)'
+      ], signer);
+      const approveTx = await wcTransaction(
+        nftContract.setApprovalForAll(SUBDOMAIN_REGISTRAR, true),
+        'Approve registrar'
+      );
+      showStatus('Waiting for approval...', '', approveTx.hash);
+      await waitForTx(approveTx);
+    }
+
+    showStatus('Configuring subdomain sales...', '');
+    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, signer);
+    const tx = await wcTransaction(
+      registrar.configure(currentTokenId, payoutAddr, feeToken, price, true, ethers.ZeroAddress, 0),
+      'Approve configuration'
+    );
+    showStatus('Waiting for confirmation...', '', tx.hash);
+    await waitForTx(tx);
+
+    showStatus('Subdomain sales enabled!', 'success', tx.hash);
+    $('manageForm').classList.remove('show');
+  } catch (e) {
+    handleError(e);
+  } finally {
+    isProcessing = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function doDisableSubSales() {
+  if (isProcessing || !signer || !currentTokenId) return;
+  isProcessing = true;
+  const btn = event?.target; if (btn) btn.disabled = true;
+
+  try {
+    showStatus('Disabling subdomain sales...', '');
+    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, signer);
+    const tx = await wcTransaction(
+      registrar.disable(currentTokenId),
+      'Approve disable'
+    );
+    showStatus('Waiting for confirmation...', '', tx.hash);
+    await waitForTx(tx);
+
+    showStatus('Subdomain sales disabled.', 'success', tx.hash);
+    $('manageForm').classList.remove('show');
+  } catch (e) {
+    handleError(e);
+  } finally {
+    isProcessing = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function doWithdrawRegFees() {
+  if (isProcessing || !signer) return;
+  isProcessing = true;
+  const btn = event?.target; if (btn) btn.disabled = true;
+
+  try {
+    showStatus('Withdrawing fees...', '');
+    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, REGISTRAR_ABI, signer);
+    const tx = await wcTransaction(
+      registrar.withdrawETH(ethers.ZeroAddress),
+      'Approve withdrawal'
+    );
+    showStatus('Waiting for confirmation...', '', tx.hash);
+    await waitForTx(tx);
+
+    showStatus('Fees withdrawn!', 'success', tx.hash);
+    showSubSalesForm();
+  } catch (e) {
+    handleError(e);
+  } finally {
+    isProcessing = false;
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function doMintSubdomain() {
+  if (!signer || !pendingMintInfo) return;
+  const { parentId, subLabel, feeToken, price, symbol } = pendingMintInfo;
+  const btn = event?.target; if (btn) btn.disabled = true;
+
+  try {
+    // Handle ERC20 approval if needed
+    if (feeToken !== ethers.ZeroAddress && price > 0n) {
+      const rpc = await getRpc();
+      const erc20Iface = new ethers.Interface([
+        'function allowance(address owner, address spender) view returns (uint256)'
+      ]);
+      const allowanceRes = await rpc.call({
+        to: feeToken,
+        data: erc20Iface.encodeFunctionData('allowance', [connectedAddress, SUBDOMAIN_REGISTRAR])
+      });
+      const currentAllowance = erc20Iface.decodeFunctionResult('allowance', allowanceRes)[0];
+
+      if (currentAllowance < price) {
+        showStatus('Approving ' + (symbol || 'token') + '...', '');
+        const tokenContract = new ethers.Contract(feeToken, [
+          'function approve(address spender, uint256 amount) returns (bool)'
+        ], signer);
+        const approveTx = await wcTransaction(
+          tokenContract.approve(SUBDOMAIN_REGISTRAR, price),
+          'Approve token spend'
+        );
+        showStatus('Waiting for approval...', '', approveTx.hash);
+        await waitForTx(approveTx);
+      }
+    }
+
+    // Mint the subdomain
+    showStatus('Minting subdomain...', '');
+    const registrar = new ethers.Contract(SUBDOMAIN_REGISTRAR, [
+      'function register(uint256 parentId, string label) payable returns (uint256)'
+    ], signer);
+    const value = feeToken === ethers.ZeroAddress ? price : 0n;
+    const tx = await wcTransaction(
+      registrar.register(parentId, subLabel, { value }),
+      'Approve mint'
+    );
+    showStatus('Waiting for confirmation...', '', tx.hash);
+    await waitForTx(tx);
+
+    const mintedName = normalizeFullName($('nameInput').value) || subLabel;
+    pendingMintInfo = null;
+    showStatus(mintedName + '.wei minted!', 'success', tx.hash);
+    doCheckName();
+  } catch (e) {
+    handleError(e);
+  } finally {
     if (btn) btn.disabled = false;
   }
 }
